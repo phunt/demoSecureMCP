@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database for Keycloak
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: mcp-postgres
     environment:
       POSTGRES_DB: keycloak
@@ -21,7 +19,7 @@ services:
 
   # Keycloak Identity Provider
   keycloak:
-    image: quay.io/keycloak/keycloak:24.0
+    image: quay.io/keycloak/keycloak:26.0
     container_name: mcp-keycloak
     environment:
       KC_DB: postgres
@@ -33,8 +31,8 @@ services:
       KC_HTTP_ENABLED: true
       KC_HEALTH_ENABLED: true
       KC_METRICS_ENABLED: true
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin_password
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin_password
     command:
       - start-dev
       - --import-realm
@@ -56,7 +54,7 @@ services:
 
   # Redis for JWKS caching
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: mcp-redis
     command: redis-server --appendonly yes
     volumes:
