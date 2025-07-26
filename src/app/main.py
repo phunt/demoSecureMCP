@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from src.config.settings import settings
+from src.config.validation import validate_and_print
 from src.app.auth.jwt_validator import jwt_validator
 from src.app.auth.dependencies import (
     get_current_user,
@@ -27,8 +28,15 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     # Startup
     print("Starting up...")
+    
+    # Validate configuration
+    validate_and_print()
+    
+    # Initialize JWT validator
     await jwt_validator.initialize()
+    
     yield
+    
     # Shutdown
     print("Shutting down...")
     await jwt_validator.close()
