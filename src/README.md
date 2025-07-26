@@ -41,7 +41,7 @@ The FastAPI application with all API endpoints, authentication, and business log
 Key components:
 - `main.py`: Application entry point and endpoint registration
 - `auth/`: JWT validation and authorization dependencies
-- `tools/`: MCP tool implementations
+- `tools/`: FastMCP tool implementations (using the FastMCP framework)
 - `api/`: Additional API endpoints (if needed)
 
 ### `config/` - Configuration Layer

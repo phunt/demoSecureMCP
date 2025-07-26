@@ -1,6 +1,6 @@
-# FastAPI Application
+# FastAPI Application with FastMCP Integration
 
-This directory contains the main FastAPI application that serves the Secure MCP Server API.
+This directory contains the main FastAPI application that serves the Secure MCP Server API, integrating **FastMCP** for Model Context Protocol support with enterprise security.
 
 ## Structure
 
@@ -11,11 +11,11 @@ app/
 ├── auth/            # Authentication & authorization
 │   ├── dependencies.py   # Auth dependencies for routes
 │   └── jwt_validator.py  # JWT token validation
-├── tools/           # MCP tool implementations
-│   ├── echo.py
-│   ├── timestamp.py
-│   ├── calculator.py
-│   └── mcp_server.py
+├── tools/           # FastMCP tool implementations
+│   ├── echo.py          # FastMCP echo tool
+│   ├── timestamp.py     # FastMCP timestamp tool
+│   ├── calculator.py    # FastMCP calculator tool
+│   └── mcp_server.py    # FastMCP server instance & registration
 ├── api/             # Additional API endpoints (future)
 └── core/            # App-specific core components (future)
 ```
@@ -150,7 +150,7 @@ async def admin_action(
     return {"status": "success"}
 ```
 
-### 3. **MCP Tool Endpoint**
+### 3. **MCP Tool Endpoint with FastMCP**
 ```python
 @app.post("/api/v1/tools/my-tool")
 async def my_tool_endpoint(
@@ -158,7 +158,7 @@ async def my_tool_endpoint(
     current_user: Annotated[TokenPayload, RequireMcpRead],
     req: Request
 ):
-    # Create context for FastMCP
+    # Create context for FastMCP framework
     ctx = create_tool_context(req)
     
     # Execute tool
@@ -202,6 +202,18 @@ TOKEN=$(curl -s -X POST http://localhost:8080/realms/mcp-realm/protocol/openid-c
 # Test endpoint
 curl -H "Authorization: Bearer $TOKEN" https://localhost/api/v1/me --insecure
 ```
+
+## FastMCP Integration
+
+This application seamlessly integrates **FastMCP** with FastAPI to provide secure MCP tools:
+
+1. **Tool Registration**: All FastMCP tools are registered in `tools/mcp_server.py`
+2. **Context Bridging**: FastAPI request context is bridged to FastMCP context
+3. **Security Layer**: OAuth 2.1 authentication wraps all FastMCP endpoints
+4. **Unified API**: FastMCP tools exposed as standard REST endpoints
+5. **Logging Integration**: FastMCP logging integrated with structured logs
+
+The integration allows FastMCP's simple tool development model while adding enterprise security features.
 
 ## Performance Considerations
 

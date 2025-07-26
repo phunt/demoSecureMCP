@@ -1,10 +1,10 @@
 # Secure MCP Server
 
-A production-ready Python/FastAPI implementation of a Model Context Protocol (MCP) server with enterprise-grade OAuth 2.1 authentication, leveraging Keycloak for identity management and Docker for deployment.
+A production-ready Python implementation of a Model Context Protocol (MCP) server built with **[FastMCP](https://github.com/fastmcp/fastmcp)** and FastAPI, featuring enterprise-grade OAuth 2.1 authentication, leveraging Keycloak for identity management and Docker for deployment.
 
 ## 🎯 Why This Project Exists
 
-The Model Context Protocol (MCP) enables seamless integration between AI models and external tools/data sources. However, most MCP implementations lack proper security controls, making them unsuitable for enterprise use. This project addresses that gap by providing:
+The Model Context Protocol (MCP) enables seamless integration between AI models and external tools/data sources. However, most MCP implementations lack proper security controls, making them unsuitable for enterprise use. This project addresses that gap by combining **FastMCP** (a Python framework for building MCP servers) with enterprise security features:
 
 - **Enterprise Security**: OAuth 2.1/PKCE compliant authentication with JWT validation
 - **Production Ready**: Docker-based deployment with nginx, health checks, and monitoring
@@ -26,7 +26,7 @@ graph TB
     end
     
     subgraph "Application Layer"
-        API[FastAPI Server<br/>- MCP Tools<br/>- JWT Validation<br/>- Scope Enforcement]
+        API[FastAPI Server<br/>- FastMCP Tools<br/>- JWT Validation<br/>- Scope Enforcement]
         MW[Middleware<br/>- Logging<br/>- Correlation IDs<br/>- Security Context]
     end
     
@@ -123,7 +123,7 @@ secure-mcp-server/
 ├── src/                    # Application source code
 │   ├── app/               # FastAPI application
 │   │   ├── auth/         # Authentication & authorization
-│   │   ├── tools/        # MCP tool implementations
+│   │   ├── tools/        # FastMCP tool implementations
 │   │   └── main.py       # Application entry point
 │   ├── config/           # Configuration management
 │   └── core/             # Core utilities & middleware
@@ -186,21 +186,23 @@ pip install -r requirements-dev.txt
 python tests/run_all_tests.py
 ```
 
-### Adding New MCP Tools
+### Adding New MCP Tools with FastMCP
+
+FastMCP makes it easy to create secure MCP tools. Here's how:
 
 1. Create tool module in `src/app/tools/`
 2. Define request/response models with Pydantic
-3. Implement tool logic with proper error handling
+3. Implement tool logic using FastMCP's Context
 4. Register endpoint in `src/app/main.py`
 5. Add scope requirements
 6. Update tool discovery endpoint
 7. Add tests
 
-Example:
+Example using **FastMCP**:
 ```python
 # src/app/tools/my_tool.py
 from pydantic import BaseModel
-from fastmcp import Context
+from fastmcp import Context  # FastMCP provides context for logging
 
 class MyToolRequest(BaseModel):
     input_data: str
@@ -301,6 +303,6 @@ Test coverage includes:
 
 ## 🙏 Acknowledgments
 
-- Built on [FastAPI](https://fastapi.tiangolo.com/)
-- Secured with [Keycloak](https://www.keycloak.org/)
-- MCP implementation using [FastMCP](https://github.com/fastmcp/fastmcp) 
+- **MCP Framework**: [FastMCP](https://github.com/fastmcp/fastmcp) - The Python framework for building MCP servers
+- **Web Framework**: [FastAPI](https://fastapi.tiangolo.com/) - Modern, fast web framework for building APIs
+- **Authentication**: [Keycloak](https://www.keycloak.org/) - Open source identity and access management 

@@ -1,6 +1,6 @@
-# MCP Tools
+# FastMCP Tools
 
-This directory contains Model Context Protocol (MCP) tool implementations that provide secure, authenticated access to various functionalities.
+This directory contains **FastMCP**-based Model Context Protocol (MCP) tool implementations that provide secure, authenticated access to various functionalities. All tools are built using the **[FastMCP](https://github.com/fastmcp/fastmcp)** framework.
 
 ## Structure
 
@@ -21,7 +21,13 @@ MCP (Model Context Protocol) tools are functions that AI models can call to:
 - Interact with APIs
 - Execute business logic
 
-In this secure implementation, all tools require proper authentication and authorization.
+In this implementation, we use **FastMCP** to define these tools with a simple, declarative API. FastMCP provides:
+- Easy tool creation with minimal boilerplate
+- Built-in context for logging and progress tracking
+- Type-safe request/response handling with Pydantic
+- Async support for efficient I/O operations
+
+All tools in this secure implementation require proper authentication and authorization.
 
 ## Tool Architecture
 
@@ -37,7 +43,9 @@ graph TD
     H --> I[JSON Response]
 ```
 
-## Creating a New Tool
+## Creating a New Tool with FastMCP
+
+FastMCP makes tool creation straightforward. Here's how to create a new tool:
 
 ### 1. Define Models
 
@@ -63,10 +71,10 @@ class WeatherResponse(BaseModel):
     forecast: Optional[List[dict]] = None
 ```
 
-### 2. Implement Tool Logic
+### 2. Implement Tool Logic Using FastMCP
 
 ```python
-from fastmcp import Context
+from fastmcp import Context  # FastMCP's Context for logging and progress
 from src.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -75,12 +83,13 @@ async def weather_tool(request: WeatherRequest, ctx: Context) -> WeatherResponse
     """
     Get weather information for a location.
     
-    This tool demonstrates:
-    - External API integration
-    - Error handling
-    - Context logging
-    - Response formatting
+    This tool demonstrates FastMCP features:
+    - Context-based logging with ctx.info(), ctx.error()
+    - Async/await support for I/O operations
+    - Type-safe request/response with Pydantic models
+    - Progress tracking capabilities
     """
+    # FastMCP Context methods for logging
     await ctx.info(f"Fetching weather for {request.location}")
     
     try:
@@ -218,33 +227,63 @@ async def test_weather_tool():
     assert len(data.get("forecast", [])) == 3
 ```
 
+## FastMCP Server Configuration (`mcp_server.py`)
+
+The `mcp_server.py` file creates and configures the FastMCP server instance:
+
+```python
+from fastmcp import FastMCP
+
+# Create FastMCP server instance
+mcp = FastMCP(
+    name="secure-mcp-server",
+    version="0.1.0"
+)
+
+# Register tools with decorators
+@mcp.tool()
+async def echo(message: str, ctx: Context) -> dict:
+    await ctx.info("Processing echo request")
+    return {"echo": message}
+
+# Register resources
+@mcp.resource("config://settings")
+async def get_settings(ctx: Context) -> str:
+    return "Current configuration..."
+```
+
+All tools are registered with this central FastMCP instance.
+
 ## Existing Tools
 
 ### Echo Tool (`echo.py`)
-- **Purpose**: Demonstrates basic tool structure
+- **Purpose**: Demonstrates basic FastMCP tool structure
 - **Scope**: `mcp:read`
 - **Features**:
   - Message transformation (uppercase)
   - Optional timestamp
   - Metadata in response
+  - Uses FastMCP Context for logging
 
 ### Timestamp Tool (`timestamp.py`)
-- **Purpose**: Time and date utilities
+- **Purpose**: Time and date utilities using FastMCP
 - **Scope**: `mcp:read`
 - **Features**:
   - Custom format strings
   - Timezone support
   - Epoch timestamps
   - Relative time calculations
+  - FastMCP Context for operation logging
 
 ### Calculator Tool (`calculator.py`)
-- **Purpose**: Mathematical operations
+- **Purpose**: Mathematical operations with FastMCP
 - **Scope**: `mcp:write` (demonstrates write scope)
 - **Features**:
   - Basic operations (add, subtract, multiply, divide)
   - Advanced operations (power, sqrt, factorial)
   - Error handling (division by zero, etc.)
   - Precision control
+  - FastMCP Context for computation tracking
 
 ## Tool Security
 
@@ -340,7 +379,9 @@ Tools are designed to be called by AI models that understand MCP protocol:
 - **Tool Permissions**: Fine-grained permissions per tool
 - **Rate Limiting**: Per-tool rate limits
 - **Caching**: Response caching for expensive operations
-- **Streaming**: Support for streaming responses
-- **Batch Operations**: Multiple tool calls in one request
+- **Streaming**: Leverage FastMCP's streaming capabilities for real-time responses
+- **Batch Operations**: Use FastMCP's batch processing features
 - **Tool Versioning**: Support multiple versions of tools
-- **Custom Scopes**: Tool-specific scope requirements 
+- **Custom Scopes**: Tool-specific scope requirements
+- **Progress Tracking**: Utilize FastMCP's progress reporting for long-running operations
+- **Tool Composition**: Build complex tools by composing FastMCP primitives 
