@@ -271,7 +271,7 @@ python tests/run_all_tests.py
 
 # Run specific test suite
 python tests/test_client_credentials.py
-python tests/test_jwt_validation.py
+python tests/test_token_validation.py
 python tests/test_mcp_tools_integration.py
 ```
 

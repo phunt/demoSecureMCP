@@ -150,7 +150,7 @@ python -c "from src.config.validation import validate_and_print; validate_and_pr
 
 1. **Never commit secrets**: Use `.env` files locally, secrets in production
 2. **Use strong passwords**: Generate with `openssl rand -base64 32`
-3. **Environment-specific files**: Use `.env.dev`, `.env.prod`, etc.
+3. **Environment-specific files**: Use `.env.example` as template, create `.env` for local dev
 4. **Validate before deployment**: Check configuration validity
 5. **Rotate secrets regularly**: Update passwords and keys periodically
 6. **Use HTTPS in production**: All URLs should use HTTPS

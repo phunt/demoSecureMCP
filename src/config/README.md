@@ -316,8 +316,8 @@ OAUTH_ISSUER=http://localhost:8080/realms/mcp-realm
 OAUTH_AUDIENCE=mcp-server
 ```
 
-### `.env.development`
-Development overrides:
+### `.env` (Local Development)
+Development settings (create from .env.example):
 ```bash
 DEBUG=true
 LOG_LEVEL=DEBUG
