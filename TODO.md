@@ -6,11 +6,11 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
 ## Task List
 
 ### 1. Project Setup
-- **Status:** ⏳ Pending
-- **Description:** Initialize project structure with Python/FastAPI, Docker, and docker-compose
+- **Status:** ✅ Completed
+- **Description:** Initialize project structure with Python/FastAPI/FastMCP, Docker, and docker-compose
 - **Actions:**
   - Create project directory structure
-  - Initialize .venv and install base dependencies: `fastapi`, `uvicorn[standard]`, `gunicorn`
+  - Initialize .venv and install base dependencies: `fastapi`, `fastmcp`, `uvicorn[standard]`, `gunicorn`
   - Create `.gitignore` with Python/Docker patterns
   - Set up `requirements.txt` and `requirements-dev.txt`
 
