@@ -44,13 +44,14 @@ services:
       - keycloak_data:/opt/keycloak/data
     ports:
       - "8080:8080"
+      - "9000:9000"  # Management port for health checks
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - mcp-network
     healthcheck:
-      test: ["CMD", "/opt/keycloak/bin/kc.sh", "show-config"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
       interval: 30s
       timeout: 10s
       retries: 5
