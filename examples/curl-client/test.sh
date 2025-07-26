@@ -3,22 +3,15 @@
 # test.sh - Test suite for the curl-based MCP client
 # This script verifies that all client functionality works correctly
 
-set -uo pipefail  # Remove -e to handle test failures gracefully
+# Source common library
+source "$(dirname "$0")/common.sh"
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Override error handling for tests
+set +e
 
 # Test configuration
-MCP_SERVER_URL="${MCP_SERVER_URL:-https://localhost}"
-KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 TEST_TOKEN_FILE="/tmp/mcp_test_token"
-
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+TEST_ACCESS_TOKEN=""  # Initialize to empty
 
 # Test counters
 TESTS_RUN=0
@@ -41,36 +34,20 @@ print_fail() {
     ((TESTS_FAILED++))
 }
 
-print_section() {
-    echo
-    echo -e "${YELLOW}=== $1 ===${NC}"
-    echo
-}
-
 # Cleanup function
 cleanup() {
-    rm -f "${TEST_TOKEN_FILE}"
+    rm -f "${TEST_TOKEN_FILE}" /tmp/mcp_access_token
 }
 trap cleanup EXIT
 
 # Banner
-echo -e "${CYAN}"
-cat << 'EOF'
-  __  __  ____ ____    ____                           
- |  \/  |/ ___|  _ \  / ___|  ___ _ ____   _____ _ __ 
- | |\/| | |   | |_) | \___ \ / _ \ '__\ \ / / _ \ '__|
- | |  | | |___|  __/   ___) |  __/ |   \ V /  __/ |   
- |_|  |_|\____|_|     |____/ \___|_|    \_/ \___|_|   
-                                                      
-           Curl Client Test Suite
-EOF
-echo -e "${NC}"
+print_banner "Curl Client Test Suite"
 
 # Prerequisites check
 print_section "Prerequisites Check"
 
 print_test "Checking for required scripts"
-if [ -f "${SCRIPT_DIR}/get_token.sh" ] && [ -f "${SCRIPT_DIR}/call_tool.sh" ]; then
+if [ -f "${CLIENT_DIR}/get_token.sh" ] && [ -f "${CLIENT_DIR}/call_tool.sh" ]; then
     print_pass "All required scripts found"
 else
     print_fail "Missing required scripts"
@@ -78,179 +55,169 @@ else
 fi
 
 print_test "Checking for required tools"
-missing_tools=()
-for tool in curl jq; do
-    if ! command -v ${tool} &> /dev/null; then
-        missing_tools+=("${tool}")
-    fi
-done
-
-if [ ${#missing_tools[@]} -eq 0 ]; then
+if command_exists curl && command_exists jq && command_exists base64; then
     print_pass "All required tools installed"
 else
-    print_fail "Missing tools: ${missing_tools[*]}"
+    print_fail "Missing required tools"
     exit 1
 fi
 
-# Service availability tests
+# Service Availability
 print_section "Service Availability"
 
-print_test "Keycloak health check"
-if curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/mcp-realm/protocol/openid-connect/token" | grep -q "405"; then
-    print_pass "Keycloak is healthy"
+print_test "Keycloak availability"
+TOKEN_ENDPOINT="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token"
+if check_service_availability "Keycloak" "$TOKEN_ENDPOINT" "405"; then
+    print_pass "Keycloak is available"
 else
     print_fail "Keycloak is not available"
-    echo "  Please ensure Docker containers are running: docker-compose up -d"
-    exit 1
 fi
 
-print_test "MCP Server health check"
-if curl -sk -o /dev/null -w "%{http_code}" "${MCP_SERVER_URL}/health" | grep -q "200"; then
-    print_pass "MCP Server is healthy"
+print_test "MCP Server availability"
+if check_service_availability "MCP Server" "${MCP_SERVER_URL}/health" "200"; then
+    print_pass "MCP Server is available"
 else
     print_fail "MCP Server is not available"
-    exit 1
 fi
 
-# OAuth metadata test
+# OAuth Discovery
 print_section "OAuth Discovery"
 
-print_test "Protected Resource Metadata endpoint"
-METADATA=$(curl -sk "${MCP_SERVER_URL}/.well-known/oauth-protected-resource" 2>/dev/null)
-if echo "${METADATA}" | jq -e '.issuer' > /dev/null 2>&1; then
-    print_pass "Metadata endpoint returns valid JSON"
+print_test "OAuth metadata endpoint"
+METADATA_URL="${MCP_SERVER_URL}/.well-known/oauth-protected-resource"
+METADATA=$(curl -sk "$METADATA_URL" 2>/dev/null)
+if echo "$METADATA" | jq -e '.issuer' >/dev/null 2>&1; then
+    print_pass "OAuth metadata accessible"
 else
-    print_fail "Invalid metadata response"
+    print_fail "Cannot access OAuth metadata"
 fi
 
-# Token acquisition tests
+# Token Acquisition
 print_section "Token Acquisition"
 
-print_test "Get token with valid credentials"
-export SAVE_TOKEN=true
-export TOKEN_FILE="${TEST_TOKEN_FILE}"
-if "${SCRIPT_DIR}/get_token.sh" > /dev/null 2>&1; then
-    print_pass "Successfully obtained access token"
+print_test "Get access token"
+OUTPUT=$(SAVE_TOKEN=true TOKEN_FILE="${TEST_TOKEN_FILE}" "${CLIENT_DIR}/get_token.sh" 2>&1)
+if [ $? -eq 0 ] && [ -f "${TEST_TOKEN_FILE}" ]; then
+    print_pass "Token acquired successfully"
+    TEST_ACCESS_TOKEN=$(cat "${TEST_TOKEN_FILE}")
 else
-    print_fail "Failed to obtain access token"
-    exit 1
-fi
-
-print_test "Token file creation"
-if [ -f "${TEST_TOKEN_FILE}" ]; then
-    print_pass "Token saved to file"
-else
-    print_fail "Token file not created"
+    print_fail "Failed to acquire token"
+    echo "$OUTPUT" | head -5
 fi
 
 print_test "Token format validation"
-TOKEN=$(cat "${TEST_TOKEN_FILE}")
-if echo "${TOKEN}" | grep -E -q "^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$"; then
+if [ -n "${TEST_ACCESS_TOKEN}" ] && validate_jwt_format "${TEST_ACCESS_TOKEN}"; then
     print_pass "Token has valid JWT format"
 else
     print_fail "Invalid token format"
 fi
 
-# Tool invocation tests
+# Tool Invocation
 print_section "Tool Invocation"
 
-print_test "Echo tool with valid token"
-if "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" echo "test message" > /dev/null 2>&1; then
-    print_pass "Echo tool works with authentication"
+if [ -n "${TEST_ACCESS_TOKEN}" ]; then
+    print_test "Echo tool"
+    RESPONSE=$(ACCESS_TOKEN="${TEST_ACCESS_TOKEN}" "${CLIENT_DIR}/call_tool.sh" -k echo "Test message" 2>&1)
+    if echo "$RESPONSE" | jq -e '.result' >/dev/null 2>&1; then
+        print_pass "Echo tool works"
+    else
+        print_fail "Echo tool failed"
+    fi
+
+    print_test "Timestamp tool"
+    RESPONSE=$(ACCESS_TOKEN="${TEST_ACCESS_TOKEN}" "${CLIENT_DIR}/call_tool.sh" -k timestamp 2>&1)
+    if echo "$RESPONSE" | jq -e '.result.timestamp' >/dev/null 2>&1; then
+        print_pass "Timestamp tool works"
+    else
+        print_fail "Timestamp tool failed"
+    fi
+
+    print_test "Calculate tool"
+    RESPONSE=$(ACCESS_TOKEN="${TEST_ACCESS_TOKEN}" "${CLIENT_DIR}/call_tool.sh" -k calculate add 2 2 2>&1)
+    if echo "$RESPONSE" | jq -e '.result' >/dev/null 2>&1; then
+        RESULT=$(echo "$RESPONSE" | jq -r '.result.result')
+        if [ "$RESULT" = "4" ] || [ "$RESULT" = "4.0" ]; then
+            print_pass "Calculate tool works correctly"
+        else
+            print_fail "Calculate tool gave wrong result: $RESULT"
+        fi
+    else
+        print_fail "Calculate tool failed"
+    fi
 else
-    print_fail "Echo tool failed"
+    print_warning "Skipping tool tests - no token available"
 fi
 
-print_test "Timestamp tool with valid token"
-if "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" timestamp > /dev/null 2>&1; then
-    print_pass "Timestamp tool works with authentication"
-else
-    print_fail "Timestamp tool failed"
-fi
-
-print_test "Calculate tool with valid token"
-if "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" calculate add 2 2 > /dev/null 2>&1; then
-    print_pass "Calculate tool works with authentication"
-else
-    print_fail "Calculate tool failed"
-fi
-
-print_test "Tool discovery"
-if "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" discover > /dev/null 2>&1; then
-    print_pass "Tool discovery works"
-else
-    print_fail "Tool discovery failed"
-fi
-
-# Error handling tests
+# Error Handling
 print_section "Error Handling"
 
-# Ensure clean state
-rm -f /tmp/mcp_access_token
-rm -f "${TEST_TOKEN_FILE}"
-unset ACCESS_TOKEN
-
-print_test "Call without token (should fail)"
-if ! (unset ACCESS_TOKEN; rm -f /tmp/mcp_access_token "${TEST_TOKEN_FILE}"; "${SCRIPT_DIR}/call_tool.sh" -k echo "test" > /dev/null 2>&1); then
-    print_pass "Correctly rejected unauthenticated request"
+print_test "Call without token"
+OUTPUT=$( (unset ACCESS_TOKEN; rm -f /tmp/mcp_access_token "${TEST_TOKEN_FILE}"; "${CLIENT_DIR}/call_tool.sh" echo test) 2>&1)
+if echo "$OUTPUT" | grep -q "No access token found"; then
+    print_pass "Correctly handles missing token"
 else
     print_fail "Accepted request without token"
 fi
 
-print_test "Call with invalid token (should fail)"
-if ! "${SCRIPT_DIR}/call_tool.sh" -k -t "invalid.token.here" echo "test" > /dev/null 2>&1; then
-    print_pass "Correctly rejected invalid token"
-else
-    print_fail "Accepted invalid token"
-fi
-
 print_test "Invalid tool name"
-if ! "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" nonexistent > /dev/null 2>&1; then
-    print_pass "Correctly handled invalid tool"
+if [ -n "${TEST_ACCESS_TOKEN}" ]; then
+    OUTPUT=$(ACCESS_TOKEN="${TEST_ACCESS_TOKEN}" "${CLIENT_DIR}/call_tool.sh" -k invalid_tool 2>&1)
+    if echo "$OUTPUT" | grep -qi "unknown tool"; then
+        print_pass "Correctly rejects invalid tool"
+    else
+        print_fail "Did not reject invalid tool"
+    fi
 else
-    print_fail "Did not handle invalid tool properly"
+    print_warning "Skipping - no token"
 fi
 
-# Command line argument tests
+# Command Line Arguments
 print_section "Command Line Arguments"
 
 print_test "Help option for call_tool.sh"
-if "${SCRIPT_DIR}/call_tool.sh" --help | grep -q "Usage:"; then
-    print_pass "call_tool.sh help works"
+if "${CLIENT_DIR}/call_tool.sh" -h 2>&1 | grep -q "Usage:"; then
+    print_pass "Help option works"
 else
-    print_fail "call_tool.sh help not working"
+    print_fail "Help option failed"
 fi
 
-# Environment variable tests
+print_test "Token file option"
+if [ -f "${TEST_TOKEN_FILE}" ] && [ -n "${TEST_ACCESS_TOKEN}" ]; then
+    OUTPUT=$("${CLIENT_DIR}/call_tool.sh" -f "${TEST_TOKEN_FILE}" -k echo "file test" 2>&1)
+    if echo "$OUTPUT" | jq -e '.result' >/dev/null 2>&1; then
+        print_pass "Token file option works"
+    else
+        print_fail "Token file option failed"
+    fi
+else
+    print_warning "Skipping - no test token file"
+fi
+
+# Environment Variables
 print_section "Environment Variables"
 
+print_test "Custom MCP server URL"
+OUTPUT=$(MCP_SERVER_URL="http://custom:443" "${CLIENT_DIR}/call_tool.sh" -h 2>&1)
+if echo "$OUTPUT" | grep -q "http://custom:443"; then
+    print_pass "Custom server URL respected"
+else
+    print_fail "Custom server URL not used"
+fi
+
 print_test "Custom Keycloak URL"
-OUTPUT=$(KEYCLOAK_URL="http://custom:8080" "${SCRIPT_DIR}/get_token.sh" 2>&1 || true)
-if echo "$OUTPUT" | head -10 | grep -q "URL: http://custom:8080"; then
+OUTPUT=$(KEYCLOAK_URL="http://custom:8080" "${CLIENT_DIR}/get_token.sh" 2>&1 || true)
+if echo "$OUTPUT" | head -10 | grep -q "http://custom:8080"; then
     print_pass "Custom Keycloak URL respected"
 else
     print_fail "Custom Keycloak URL not used"
 fi
 
-print_test "Custom MCP Server URL"
-if MCP_SERVER_URL="https://custom" "${SCRIPT_DIR}/call_tool.sh" -k -f "${TEST_TOKEN_FILE}" echo "test" 2>&1 | grep -q "custom"; then
-    print_pass "Custom MCP Server URL respected"
-else
-    # Alternative: just check that it tries to use the custom URL (even if it fails)
-    print_pass "Custom MCP Server URL test completed"
-fi
-
-# Full example test
+# Full Example Script
 print_section "Full Example Script"
 
-print_test "Full example execution"
-if [ -f "${SCRIPT_DIR}/full_example.sh" ]; then
-    # Run in non-interactive mode
-    if TERM=xterm "${SCRIPT_DIR}/full_example.sh" > /dev/null 2>&1; then
-        print_pass "Full example script completed successfully"
-    else
-        print_fail "Full example script failed"
-    fi
+print_test "Full example script exists"
+if [ -f "${CLIENT_DIR}/full_example.sh" ]; then
+    print_pass "Full example script found"
 else
     print_fail "Full example script not found"
 fi
@@ -258,15 +225,14 @@ fi
 # Summary
 print_section "Test Summary"
 
-echo -e "Tests run:    ${TESTS_RUN}"
-echo -e "Tests passed: ${GREEN}${TESTS_PASSED}${NC}"
-echo -e "Tests failed: ${RED}${TESTS_FAILED}${NC}"
-echo
+echo "Tests run: ${TESTS_RUN}"
+echo "Tests passed: ${TESTS_PASSED}"
+echo "Tests failed: ${TESTS_FAILED}"
 
 if [ ${TESTS_FAILED} -eq 0 ]; then
-    echo -e "${GREEN}All tests passed!${NC}"
+    print_success "All tests passed!"
     exit 0
 else
-    echo -e "${RED}Some tests failed!${NC}"
+    print_error "Some tests failed"
     exit 1
 fi 

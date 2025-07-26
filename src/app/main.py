@@ -257,7 +257,7 @@ async def echo_endpoint(
     
     try:
         response = await echo_tool(request, ctx)
-        return response.model_dump()
+        return {"result": response.model_dump()}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -287,7 +287,7 @@ async def timestamp_endpoint(
     
     try:
         response = await timestamp_tool(request, ctx)
-        return response.model_dump()
+        return {"result": response.model_dump()}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -326,7 +326,7 @@ async def calculate_endpoint(
     
     try:
         response = await calculator_tool(request, ctx)
-        return response.model_dump()
+        return {"result": response.model_dump()}
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
