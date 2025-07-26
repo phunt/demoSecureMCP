@@ -25,14 +25,17 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - Configure client scopes: `mcp:read`, `mcp:write`, `mcp:infer`
 
 ### 3. JWT Validation Implementation
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Implement JWT validation middleware with PyJWT and JWKS fetching from Keycloak
 - **Dependencies:** `PyJWT`, `cryptography`, `httpx` (for async HTTP calls)
 - **Actions:**
-  - Fetch Keycloak's OpenID discovery document
-  - Implement JWKS caching with TTL
-  - Create JWT validation function with signature, issuer, audience, and expiry checks
-  - Extract and validate scopes/roles from token
+  - ✅ Fetch Keycloak's OpenID discovery document
+  - ✅ Implement JWKS caching with TTL (using Redis)
+  - ✅ Create JWT validation function with signature, issuer, audience, and expiry checks
+  - ✅ Extract and validate scopes/roles from token
+  - ✅ Handle Keycloak's use of 'azp' claim for client credentials flow
+  - ✅ Implement FastAPI dependencies for token validation
+  - ✅ Add scope-based authorization decorators
 
 ### 4. Protected Resource Metadata Endpoint
 - **Status:** ⏳ Pending
