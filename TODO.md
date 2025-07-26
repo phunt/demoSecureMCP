@@ -134,14 +134,15 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Document configuration in docs/DOCKER.md
 
 ### 12. Testing & Verification
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Create test scripts to verify OAuth flow, token validation, and tool access
 - **Actions:**
-  - Create client credentials flow test
-  - Test token validation with valid/invalid tokens
-  - Verify scope enforcement
-  - Create integration test for the demo tool
-  - Document testing procedures
+  - ✅ Create client credentials flow test (`tests/test_client_credentials.py`)
+  - ✅ Test token validation with valid/invalid tokens (`tests/test_token_validation.py`)
+  - ✅ Verify scope enforcement (included in both test suites)
+  - ✅ Create integration test for the demo tools (`tests/test_mcp_tools_integration.py`)
+  - ✅ Document testing procedures (`docs/TESTING.md`)
+  - ✅ Create comprehensive test runner (`tests/run_all_tests.py`)
 
 ## Key Security Requirements Checklist
 
