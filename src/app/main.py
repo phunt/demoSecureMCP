@@ -71,6 +71,39 @@ async def health_check():
     )
 
 
+@app.get("/.well-known/oauth-protected-resource", tags=["Metadata"])
+async def get_protected_resource_metadata():
+    """
+    OAuth 2.0 Protected Resource Metadata endpoint (RFC 9728)
+    
+    Provides metadata about this protected resource to help clients
+    understand how to authenticate and authorize requests.
+    
+    This endpoint is publicly accessible (no authentication required).
+    """
+    metadata = {
+        "issuer": str(settings.oauth_issuer),
+        "resource": settings.mcp_resource_identifier,
+        "token_introspection_endpoint": str(settings.oauth_token_introspection_endpoint) if settings.oauth_token_introspection_endpoint else None,
+        "token_types_supported": ["Bearer"],
+        "scopes_supported": settings.mcp_supported_scopes,
+        "bearer_methods_supported": ["header"],
+        "resource_documentation": "https://github.com/phunt/demoSecureMCP",
+        "resource_signing_alg_values_supported": settings.jwt_algorithms,
+    }
+    
+    # Remove None values for cleaner response
+    metadata = {k: v for k, v in metadata.items() if v is not None}
+    
+    return JSONResponse(
+        content=metadata,
+        media_type="application/json",
+        headers={
+            "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+        }
+    )
+
+
 # Protected endpoints for testing
 @app.get("/api/v1/me", tags=["Auth"])
 async def get_current_user_info(

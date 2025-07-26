@@ -69,20 +69,49 @@ services:
       timeout: 5s
       retries: 5
 
-  # MCP FastAPI Server (to be added in later step)
-  # mcp-server:
-  #   build: .
-  #   container_name: mcp-server
-  #   environment:
-  #     - KEYCLOAK_URL=http://keycloak:8080
-  #     - REDIS_URL=redis://redis:6379/0
-  #   depends_on:
-  #     keycloak:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - mcp-network
+  # MCP FastAPI Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-server
+    expose:
+      - "8000"
+    env_file:
+      - .env.docker
+    depends_on:
+      - keycloak
+      - redis
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mcp-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - mcp-server
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
 networks:
   mcp-network:
@@ -90,4 +119,5 @@ networks:
 
 volumes:
   postgres_data:
-  redis_data: 
+  redis_data:
+  nginx_logs: 

@@ -38,39 +38,47 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Add scope-based authorization decorators
 
 ### 4. Protected Resource Metadata Endpoint
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Create /.well-known/oauth-protected-resource endpoint (RFC 9728 compliance)
 - **Actions:**
-  - Implement GET endpoint returning OAuth 2.0 Protected Resource Metadata
-  - Include issuer, resource identifier, token types, and supported scopes
-  - Make endpoint publicly accessible (no auth required)
+  - ✅ Implement GET endpoint returning OAuth 2.0 Protected Resource Metadata
+  - ✅ Include issuer, resource identifier, token types, and supported scopes
+  - ✅ Make endpoint publicly accessible (no auth required)
+  - ✅ Add cache headers for client optimization
+  - ✅ Include optional fields like token introspection endpoint and resource documentation
 
 ### 5. FastAPI Security Dependencies
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Implement FastAPI dependencies for token validation and scope-based authorization
 - **Actions:**
-  - Create `get_current_user` dependency using JWT validation
-  - Implement scope-checking decorators/dependencies
-  - Add proper error handling (401/403 responses)
-  - Create user context extraction from validated tokens
+  - ✅ Create `get_current_user` dependency using JWT validation
+  - ✅ Implement scope-checking decorators/dependencies
+  - ✅ Add proper error handling (401/403 responses)  
+  - ✅ Create user context extraction from validated tokens
 
 ### 6. Docker Configuration
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Create production-ready Dockerfile with multi-stage build and security best practices
 - **Actions:**
-  - Multi-stage build: build stage with full Python, runtime with slim image
-  - Run as non-root user
-  - Copy only necessary files
-  - Set up health check endpoint
+  - ✅ Multi-stage build: build stage with full Python, runtime with slim image
+  - ✅ Run as non-root user
+  - ✅ Copy only necessary files
+  - ✅ Set up health check endpoint
+  - ✅ Create production Dockerfile with Gunicorn
+  - ✅ Configure Docker Compose integration
+  - ✅ Handle Docker networking for service communication
 
 ### 7. Nginx Reverse Proxy
-- **Status:** ⏳ Pending
+- **Status:** ✅ Completed
 - **Description:** Configure Nginx reverse proxy with SSL/TLS termination in docker-compose
 - **Actions:**
-  - Add Nginx service to docker-compose
-  - Configure SSL with Let's Encrypt or self-signed certs for dev
-  - Set up HTTPS redirect and HSTS headers
-  - Configure proxy pass to FastAPI service
+  - ✅ Add Nginx service to docker-compose
+  - ✅ Configure SSL with Let's Encrypt or self-signed certs for dev
+  - ✅ Set up HTTPS redirect and HSTS headers
+  - ✅ Configure proxy pass to FastAPI service
+  - ✅ Add security headers (X-Frame-Options, CSP, etc.)
+  - ✅ Configure WebSocket support
+  - ✅ Set up caching for .well-known endpoints
 
 ### 8. Environment Configuration
 - **Status:** ⏳ Pending

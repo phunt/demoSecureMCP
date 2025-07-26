@@ -85,7 +85,8 @@ class JWTValidator:
                 await self._cache_openid_config(openid_config)
         
         # Create JWKS client
-        jwks_uri = openid_config.get("jwks_uri", str(self.settings.oauth_jwks_uri))
+        # Always use the configured JWKS URI to handle Docker networking properly
+        jwks_uri = str(self.settings.oauth_jwks_uri)
         self.jwks_client = PyJWKClient(jwks_uri)
     
     async def _get_cached_openid_config(self) -> Optional[Dict]:
