@@ -163,6 +163,26 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Explain why this project exists and its use cases
   - ✅ Include quick start guides for developers
 
+### 14. Example Client Implementation
+- **Status:** ✅ Completed
+- **Description:** Create a shell-based example client using curl commands to demonstrate OAuth flow and MCP tool usage
+- **Actions:**
+  - ✅ Create `examples/curl-client/` directory structure
+  - ✅ Create `examples/curl-client/README.md` with comprehensive usage guide
+  - ✅ Implement shell scripts for:
+    - ✅ `get_token.sh`: Obtain access token via client credentials flow from Keycloak
+    - ✅ `call_tool.sh`: Call MCP server tools with proper authentication
+    - ✅ `full_example.sh`: Complete end-to-end example combining auth + tool calls
+  - ✅ Include examples for all three demo tools (echo, timestamp, calculate)
+  - ✅ Add error handling and helpful output messages
+  - ✅ Create `examples/curl-client/test.sh` to verify client functionality
+  - ✅ Update main README.md to reference the example client
+  - ✅ Update docs/TESTING.md to include client testing procedures
+  - ✅ Ensure scripts work with default docker-compose setup
+  - ✅ Document required environment variables and configuration
+  - ✅ Include troubleshooting section for common issues
+  - ✅ Add examples of handling different OAuth error scenarios
+
 ## Key Security Requirements Checklist
 
 - [ ] OAuth 2.1 compliant token validation

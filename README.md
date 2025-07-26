@@ -116,6 +116,24 @@ curl -X POST https://localhost/api/v1/tools/echo \
   --insecure
 ```
 
+### 5. Use the Example Curl Client
+
+For a complete example of OAuth authentication and tool usage, see the curl-based client:
+
+```bash
+cd examples/curl-client
+
+# Run the full demo
+./full_example.sh
+
+# Or use individual scripts
+./get_token.sh                    # Get access token
+./call_tool.sh echo "Hello!"      # Call tools
+./test.sh                         # Run test suite
+```
+
+See [examples/curl-client/README.md](examples/curl-client/README.md) for detailed documentation.
+
 ## 📁 Project Structure
 
 ```
@@ -127,6 +145,8 @@ secure-mcp-server/
 │   │   └── main.py       # Application entry point
 │   ├── config/           # Configuration management
 │   └── core/             # Core utilities & middleware
+├── examples/              # Example implementations
+│   └── curl-client/      # Shell-based client using curl
 ├── tests/                 # Test suites
 ├── keycloak/             # Keycloak configuration
 ├── nginx/                # Nginx reverse proxy config

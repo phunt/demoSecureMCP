@@ -68,7 +68,9 @@ wait_for_healthy() {
         
         # Check each service health
         for service in postgres keycloak redis mcp-server nginx; do
-            if docker compose ps --format json | jq -r ".[] | select(.Service==\"$service\") | .Health" | grep -q "healthy"; then
+            health=$(docker compose ps --format json | jq -r --arg svc "$service" 'select(.Service == $svc) | .Health' | head -n1 || echo "unknown")
+            
+            if [[ "$health" == "healthy" ]]; then
                 echo -n "."
             else
                 all_healthy=false
@@ -182,7 +184,11 @@ case "$1" in
         
         # Check each service
         for service in postgres keycloak redis mcp-server nginx; do
-            health=$(docker compose ps --format json | jq -r ".[] | select(.Service==\"$service\") | .Health" || echo "unknown")
+            health=$(docker compose ps --format json | jq -r --arg svc "$service" 'select(.Service == $svc) | .Health' | head -n1 || echo "unknown")
+            
+            if [ -z "$health" ]; then
+                health="not found"
+            fi
             
             if [[ "$health" == "healthy" ]]; then
                 print_color $GREEN "✓ $service: $health"

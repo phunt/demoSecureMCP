@@ -64,6 +64,30 @@ Tests the demo MCP tools:
 - Error responses
 - Edge cases
 
+### 4. Curl Client Test Suite
+**File**: `examples/curl-client/test.sh`
+
+Tests the curl-based MCP client implementation:
+- OAuth token acquisition via shell scripts
+- Authenticated API calls using curl
+- Error handling in shell scripts
+- Environment variable configuration
+- All demo tools via command line
+
+**Test coverage**:
+- Service availability checks
+- Token format validation
+- Tool invocation with authentication
+- Invalid token/credential handling
+- Command-line argument parsing
+- Full end-to-end workflow
+
+**Running the curl client tests**:
+```bash
+cd examples/curl-client
+./test.sh
+```
+
 ## Running Tests
 
 ### Prerequisites
@@ -188,6 +212,26 @@ jobs:
 ```
 
 ## Manual Testing
+
+### Using the Curl Client
+
+The project includes a comprehensive curl-based client for manual testing:
+
+```bash
+cd examples/curl-client
+
+# Full demonstration
+./full_example.sh
+
+# Individual operations
+./get_token.sh                     # Get OAuth token
+./call_tool.sh echo "Test"         # Call echo tool
+./call_tool.sh timestamp           # Get timestamp
+./call_tool.sh calculate "5 * 10"  # Calculate expression
+./call_tool.sh discover            # List available tools
+```
+
+See [examples/curl-client/README.md](../examples/curl-client/README.md) for detailed usage.
 
 ### 1. Token Acquisition
 
