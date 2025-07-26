@@ -13,6 +13,12 @@ import uvicorn
 
 from src.config.settings import settings
 from src.config.validation import validate_and_print
+from src.core.logging import configure_logging
+from src.core.middleware import (
+    CorrelationIDMiddleware,
+    LoggingMiddleware,
+    SecurityContextMiddleware
+)
 from src.app.auth.jwt_validator import jwt_validator
 from src.app.auth.dependencies import (
     get_current_user,
@@ -28,6 +34,9 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     # Startup
     print("Starting up...")
+    
+    # Configure logging
+    configure_logging()
     
     # Validate configuration
     validate_and_print()
@@ -58,6 +67,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add custom middleware (order matters - reverse order of execution)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(SecurityContextMiddleware) 
+app.add_middleware(CorrelationIDMiddleware)
 
 
 @app.get("/", tags=["Health"])

@@ -21,6 +21,9 @@ import redis.asyncio as redis
 from pydantic import BaseModel
 
 from src.config.settings import settings
+from src.core.logging import security_logger, get_logger
+
+logger = get_logger(__name__)
 
 
 class TokenPayload(BaseModel):
@@ -57,8 +60,9 @@ class JWTValidator:
                 decode_responses=True
             )
             await self.redis_client.ping()
+            logger.info("Redis connection established for JWKS caching")
         except Exception as e:
-            print(f"Warning: Redis connection failed: {e}. Using in-memory cache.")
+            logger.warning(f"Redis connection failed: {e}. Using in-memory cache.")
             self.redis_client = None
         
         # Initialize JWKS client
@@ -186,20 +190,40 @@ class JWTValidator:
             if 'aud' not in payload and 'azp' in payload:
                 payload['aud'] = payload['azp']
             
-            return TokenPayload(**payload)
+            token_payload = TokenPayload(**payload)
+            
+            # Log successful validation
+            security_logger.log_token_validation(
+                success=True,
+                extra={'sub': token_payload.sub}
+            )
+            
+            return token_payload
             
         except ExpiredSignatureError:
-            raise InvalidTokenError("Token has expired")
+            error = "Token has expired"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
         except InvalidSignatureError:
-            raise InvalidTokenError("Invalid token signature")
+            error = "Invalid token signature"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
         except InvalidIssuerError:
-            raise InvalidTokenError("Invalid token issuer")
+            error = "Invalid token issuer"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
         except InvalidAudienceError:
-            raise InvalidTokenError("Invalid token audience")
+            error = "Invalid token audience"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
         except MissingRequiredClaimError as e:
-            raise InvalidTokenError(f"Missing required claim: {e}")
+            error = f"Missing required claim: {e}"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
         except Exception as e:
-            raise InvalidTokenError(f"Token validation failed: {str(e)}")
+            error = f"Token validation failed: {str(e)}"
+            security_logger.log_token_validation(success=False, error=error)
+            raise InvalidTokenError(error)
     
     def extract_scopes(self, payload: TokenPayload) -> List[str]:
         """Extract scopes from token payload"""
