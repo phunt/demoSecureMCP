@@ -225,7 +225,8 @@ fi
 print_section "Environment Variables"
 
 print_test "Custom Keycloak URL"
-if KEYCLOAK_URL="http://custom:8080" "${SCRIPT_DIR}/get_token.sh" 2>&1 | head -10 | grep -q "URL: http://custom:8080"; then
+OUTPUT=$(KEYCLOAK_URL="http://custom:8080" "${SCRIPT_DIR}/get_token.sh" 2>&1 || true)
+if echo "$OUTPUT" | head -10 | grep -q "URL: http://custom:8080"; then
     print_pass "Custom Keycloak URL respected"
 else
     print_fail "Custom Keycloak URL not used"
