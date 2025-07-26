@@ -144,6 +144,25 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Document testing procedures (`docs/TESTING.md`)
   - ✅ Create comprehensive test runner (`tests/run_all_tests.py`)
 
+### 13. Architecture Documentation
+- **Status:** ✅ Completed
+- **Description:** Document the overall architecture and create README files for each major component
+- **Actions:**
+  - ✅ Create comprehensive architecture overview in main README.md
+  - ✅ Add README.md to src/ explaining the application structure
+  - ✅ Add README.md to src/app/ explaining the FastAPI application
+  - ✅ Add README.md to src/app/auth/ explaining authentication implementation
+  - ✅ Add README.md to src/app/tools/ explaining MCP tools structure
+  - ✅ Add README.md to src/config/ explaining configuration management
+  - ✅ Add README.md to src/core/ explaining core utilities and middleware
+  - ✅ Add README.md to tests/ explaining the testing strategy
+  - ✅ Add README.md to keycloak/ explaining the Keycloak configuration (updated existing)
+  - ✅ Add README.md to nginx/ explaining the reverse proxy setup
+  - ✅ Create architecture diagrams showing component interactions
+  - ✅ Document the security model and data flow
+  - ✅ Explain why this project exists and its use cases
+  - ✅ Include quick start guides for developers
+
 ## Key Security Requirements Checklist
 
 - [ ] OAuth 2.1 compliant token validation
