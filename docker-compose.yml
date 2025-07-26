@@ -3,6 +3,7 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: mcp-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -21,6 +22,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: mcp-keycloak
+    restart: unless-stopped
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -33,11 +35,13 @@ services:
       KC_METRICS_ENABLED: true
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin_password
+      KC_LOG_LEVEL: INFO
     command:
       - start-dev
       - --import-realm
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - keycloak_data:/opt/keycloak/data
     ports:
       - "8080:8080"
     depends_on:
@@ -56,7 +60,8 @@ services:
   redis:
     image: redis:7.4-alpine
     container_name: mcp-redis
-    command: redis-server --appendonly yes
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -75,13 +80,19 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: mcp-server
+    restart: unless-stopped
     expose:
       - "8000"
     env_file:
       - .env.docker
+    volumes:
+      - ./src:/app/src:ro  # Mount source code for development
+      - mcp_logs:/app/logs
     depends_on:
-      - keycloak
-      - redis
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - mcp-network
     healthcheck:
@@ -95,6 +106,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: mcp-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -103,7 +115,8 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - mcp-server
+      mcp-server:
+        condition: service_healthy
     networks:
       - mcp-network
     healthcheck:
@@ -116,8 +129,20 @@ services:
 networks:
   mcp-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: mcp_bridge
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
-  nginx_logs: 
+    driver: local
+  keycloak_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  mcp_logs:
+    driver: local 
