@@ -4,9 +4,9 @@ A production-ready MCP server with OAuth 2.1/PKCE compliance using Keycloak
 """
 
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Dict, Any, List
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -27,6 +27,9 @@ from src.app.auth.dependencies import (
     RequireMcpWrite,
     RequireMcpInfer
 )
+from src.app.tools.echo import echo_tool, EchoRequest
+from src.app.tools.timestamp import timestamp_tool, TimestampRequest
+from src.app.tools.calculator import calculator_tool, CalculatorRequest
 
 
 @asynccontextmanager
@@ -175,6 +178,165 @@ async def protected_infer(
         "user": current_user.preferred_username,
         "scope": "mcp:infer"
     }
+
+
+# MCP Tool endpoints
+@app.get("/api/v1/tools", tags=["MCP Tools"])
+async def list_tools(
+    current_user: Annotated[TokenPayload, Depends(get_current_user)]
+):
+    """List available MCP tools and their requirements"""
+    user_scopes = jwt_validator.extract_scopes(current_user)
+    
+    tools = [
+        {
+            "name": "echo",
+            "description": "Echo messages with optional transformations",
+            "endpoint": "/api/v1/tools/echo",
+            "required_scope": "mcp:read",
+            "available": "mcp:read" in user_scopes,
+            "parameters": {
+                "message": "string (required)",
+                "uppercase": "boolean (optional, default: false)",
+                "timestamp": "boolean (optional, default: false)"
+            }
+        },
+        {
+            "name": "get_timestamp",
+            "description": "Get current timestamp with formatting options",
+            "endpoint": "/api/v1/tools/timestamp",
+            "required_scope": "mcp:read",
+            "available": "mcp:read" in user_scopes,
+            "parameters": {
+                "format": "string (optional, strftime format)",
+                "timezone": "string (optional, timezone name)",
+                "include_epoch": "boolean (optional, default: false)"
+            }
+        },
+        {
+            "name": "calculate",
+            "description": "Perform mathematical calculations",
+            "endpoint": "/api/v1/tools/calculate",
+            "required_scope": "mcp:write",
+            "available": "mcp:write" in user_scopes,
+            "parameters": {
+                "operation": "string (required: add|subtract|multiply|divide|power|sqrt|factorial)",
+                "operands": "array of numbers (required)",
+                "precision": "integer (optional, decimal places)"
+            }
+        }
+    ]
+    
+    return {
+        "tools": tools,
+        "user_scopes": user_scopes,
+        "total": len(tools),
+        "available": len([t for t in tools if t["available"]])
+    }
+
+
+@app.post("/api/v1/tools/echo", tags=["MCP Tools"])
+async def echo_endpoint(
+    request: EchoRequest,
+    current_user: Annotated[TokenPayload, RequireMcpRead],
+    req: Request
+):
+    """
+    Echo tool - returns your message with optional transformations.
+    
+    Requires mcp:read scope.
+    """
+    # Create a mock context for the tool
+    class MockContext:
+        async def info(self, msg: str): pass
+        async def debug(self, msg: str): pass
+        async def warning(self, msg: str): pass
+        async def error(self, msg: str): pass
+    
+    ctx = MockContext()
+    
+    try:
+        response = await echo_tool(request, ctx)
+        return response.model_dump()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tool execution failed: {str(e)}"
+        )
+
+
+@app.post("/api/v1/tools/timestamp", tags=["MCP Tools"])
+async def timestamp_endpoint(
+    request: TimestampRequest,
+    current_user: Annotated[TokenPayload, RequireMcpRead],
+    req: Request
+):
+    """
+    Timestamp tool - get current timestamp with various formatting options.
+    
+    Requires mcp:read scope.
+    """
+    # Create a mock context for the tool
+    class MockContext:
+        async def info(self, msg: str): pass
+        async def debug(self, msg: str): pass
+        async def warning(self, msg: str): pass
+        async def error(self, msg: str): pass
+    
+    ctx = MockContext()
+    
+    try:
+        response = await timestamp_tool(request, ctx)
+        return response.model_dump()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tool execution failed: {str(e)}"
+        )
+
+
+@app.post("/api/v1/tools/calculate", tags=["MCP Tools"])
+async def calculate_endpoint(
+    request: CalculatorRequest,
+    current_user: Annotated[TokenPayload, RequireMcpWrite],
+    req: Request
+):
+    """
+    Calculator tool - perform mathematical calculations.
+    
+    Requires mcp:write scope.
+    
+    Supported operations:
+    - add: Addition of 2 or more numbers
+    - subtract: Subtraction (left to right)
+    - multiply: Multiplication of 2 or more numbers
+    - divide: Division (left to right)
+    - power: Exponentiation (base^exponent)
+    - sqrt: Square root (single operand)
+    - factorial: Factorial (single operand)
+    """
+    # Create a mock context for the tool
+    class MockContext:
+        async def info(self, msg: str): pass
+        async def debug(self, msg: str): pass
+        async def warning(self, msg: str): pass
+        async def error(self, msg: str): pass
+    
+    ctx = MockContext()
+    
+    try:
+        response = await calculator_tool(request, ctx)
+        return response.model_dump()
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tool execution failed: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

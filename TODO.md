@@ -104,13 +104,16 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Include security context in logs
 
 ### 10. Demo MCP Tool
-- **Status:** ⏳ Pending
-- **Description:** Implement a simple MCP tool (e.g., echo or timestamp) to demonstrate secure access
+- **Status:** ✅ Completed
+- **Description:** Implement a simple MCP tool (e.g., echo or timestamp) using FastMCP to demonstrate secure access
 - **Actions:**
-  - Create `/tools/echo` endpoint requiring `mcp:read` scope
-  - Implement request/response according to MCP protocol
-  - Add OpenAPI documentation
-  - Include in tool discovery endpoint
+  - ✅ Create `/tools/echo` endpoint requiring `mcp:read` scope
+  - ✅ Create `/tools/timestamp` endpoint requiring `mcp:read` scope
+  - ✅ Create `/tools/calculate` endpoint requiring `mcp:write` scope
+  - ✅ Implement request/response according to MCP protocol
+  - ✅ Add OpenAPI documentation
+  - ✅ Include in tool discovery endpoint `/api/v1/tools`
+  - ✅ Test all tools with proper authentication and scopes
 
 ### 11. Docker Compose Configuration
 - **Status:** ⏳ Pending
