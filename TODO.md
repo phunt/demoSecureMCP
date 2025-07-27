@@ -1,4 +1,4 @@
-# Secure MCP Server TODO List
+# demoSecureMCP TODO List
 
 ## Overview
 Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE compliance, leveraging Keycloak for authentication and Docker for deployment.

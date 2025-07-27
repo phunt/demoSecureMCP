@@ -1,6 +1,6 @@
 # Dynamic Client Registration (DCR) Implementation
 
-This document describes the Dynamic Client Registration (DCR) implementation in the Secure MCP Server.
+This document describes the Dynamic Client Registration (DCR) implementation in the demoSecureMCP.
 
 ## Overview
 

@@ -13,7 +13,7 @@ init_client
 
 # Banner
 clear
-print_banner "Secure MCP Server - Full Example Demo"
+print_banner "demoSecureMCP - Full Example Demo"
 
 print_info "This demo will show the complete OAuth 2.0 flow and tool usage"
 print_info "Make sure Docker containers are running: docker-compose up -d"

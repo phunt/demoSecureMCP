@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # Create FastMCP server instance
 mcp = FastMCP(
-    "Secure MCP Server",
+    "demoSecureMCP",
     description="A secure MCP server with OAuth 2.1 authentication and demo tools"
 )
 
@@ -189,7 +189,7 @@ async def get_server_info(ctx: Context = None) -> str:
     and security configuration.
     """
     info = {
-        "name": "Secure MCP Server",
+        "name": "demoSecureMCP",
         "version": "0.1.0",
         "description": "A secure MCP server with OAuth 2.1 authentication",
         "tools": [

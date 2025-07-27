@@ -1,6 +1,6 @@
 # Nginx Reverse Proxy Configuration
 
-This directory contains the Nginx configuration for the Secure MCP Server, providing SSL/TLS termination, security headers, and reverse proxy functionality.
+This directory contains the Nginx configuration for the demoSecureMCP, providing SSL/TLS termination, security headers, and reverse proxy functionality.
 
 ## Purpose
 

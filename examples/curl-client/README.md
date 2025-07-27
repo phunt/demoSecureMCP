@@ -1,6 +1,6 @@
 # MCP Server Curl Client
 
-A shell-based client implementation for the Secure MCP Server using only `curl` commands. This demonstrates OAuth 2.0 client credentials flow and secure API interaction without any programming language dependencies.
+A shell-based client implementation for the demoSecureMCP using only `curl` commands. This demonstrates OAuth 2.0 client credentials flow and secure API interaction without any programming language dependencies.
 
 ## Overview
 
@@ -411,4 +411,4 @@ This client is designed for demonstration and testing. For production use:
 
 ## License
 
-This example client is part of the Secure MCP Server project. See the main project LICENSE file for details. 
+This example client is part of the demoSecureMCP project. See the main project LICENSE file for details. 

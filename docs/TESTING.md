@@ -1,6 +1,6 @@
 # Testing Documentation
 
-This document describes the testing procedures and test suites for the Secure MCP Server.
+This document describes the testing procedures and test suites for the demoSecureMCP.
 
 ## Overview
 

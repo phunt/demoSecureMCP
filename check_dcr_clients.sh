@@ -93,6 +93,6 @@ fi
 echo -e "\n=== Summary ==="
 echo "To identify DCR clients vs static clients:"
 echo "- Static clients: Have predefined client IDs (like 'mcp-server')"
-echo "- DCR clients: Have generated UUIDs as client IDs and names like 'MCP Server (secure-mcp-server)'"
+echo "- DCR clients: Have generated UUIDs as client IDs and names like 'MCP Server (demoSecureMCP)'"
 echo "- DCR clients may have registration access tokens"
 echo "- Local .dcr_client.json file indicates the server has registered via DCR" 

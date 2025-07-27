@@ -1,6 +1,6 @@
 # Docker Compose Configuration
 
-This document describes the Docker Compose setup for the Secure MCP Server project.
+This document describes the Docker Compose setup for the demoSecureMCP project.
 
 ## Overview
 

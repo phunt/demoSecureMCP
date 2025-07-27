@@ -1,6 +1,6 @@
 # Environment Variables Documentation
 
-This document provides comprehensive information about all environment variables used by the Secure MCP Server.
+This document provides comprehensive information about all environment variables used by the demoSecureMCP.
 
 ## Configuration Files
 
@@ -15,7 +15,7 @@ This document provides comprehensive information about all environment variables
 
 | Variable | Type | Default | Required | Description |
 |----------|------|---------|----------|-------------|
-| `APP_NAME` | string | `secure-mcp-server` | No | Application name for logging and identification |
+| `APP_NAME` | string | `demoSecureMCP` | No | Application name for logging and identification |
 | `APP_VERSION` | string | `0.1.0` | No | Application version |
 | `DEBUG` | boolean | `false` | No | Enable debug mode (set to `false` in production) |
 | `LOG_LEVEL` | string | `INFO` | No | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |

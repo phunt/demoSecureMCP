@@ -1,6 +1,6 @@
 # Testing Strategy
 
-This directory contains the comprehensive test suite for the Secure MCP Server, ensuring reliability, security, and correctness of all components.
+This directory contains the comprehensive test suite for the demoSecureMCP, ensuring reliability, security, and correctness of all components.
 
 ## Test Structure
 

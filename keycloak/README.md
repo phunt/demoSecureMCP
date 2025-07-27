@@ -1,6 +1,6 @@
 # Keycloak Configuration
 
-This directory contains the Keycloak configuration for the secure MCP server.
+This directory contains the Keycloak configuration for the demoSecureMCP.
 
 ## Files
 
@@ -63,7 +63,7 @@ If you prefer to set up DCR manually:
 ### DCR Configuration
 
 The DCR client registration includes:
-- Client name: "MCP Server (secure-mcp-server)"
+- Client name: "MCP Server (demoSecureMCP)"
 - Grant types: client_credentials
 - Authentication method: client_secret_basic
 - Automatic persistence of registration

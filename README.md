@@ -1,4 +1,4 @@
-# Secure MCP Server
+# demoSecureMCP
 
 A production-ready Python implementation of a Model Context Protocol (MCP) server built with **[FastMCP](https://github.com/fastmcp/fastmcp)** and FastAPI, featuring enterprise-grade OAuth 2.1 authentication, leveraging Keycloak for identity management and Docker for deployment.
 
@@ -60,8 +60,8 @@ graph TB
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/yourusername/secure-mcp-server.git
-cd secure-mcp-server
+git clone https://github.com/yourusername/demoSecureMCP.git
+cd demoSecureMCP
 
 # Copy environment template
 cp .env.example .env
@@ -159,7 +159,7 @@ See [examples/curl-client/README.md](examples/curl-client/README.md) for detaile
 ## 📁 Project Structure
 
 ```
-secure-mcp-server/
+demoSecureMCP/
 ├── src/                    # Application source code
 │   ├── app/               # FastAPI application
 │   │   ├── auth/         # Authentication & authorization

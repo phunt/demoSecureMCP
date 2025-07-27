@@ -236,7 +236,7 @@ from fastmcp import FastMCP
 
 # Create FastMCP server instance
 mcp = FastMCP(
-    name="secure-mcp-server",
+    name="demoSecureMCP",
     version="0.1.0"
 )
 

@@ -1,5 +1,5 @@
 """
-Secure MCP Server
+demoSecureMCP
 A production-ready MCP server with OAuth 2.1/PKCE compliance using Keycloak
 """
 
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Secure MCP Server",
+    title="demoSecureMCP",
     description="A Model Context Protocol server with OAuth 2.1 authentication",
     version="0.1.0",
     lifespan=lifespan,
@@ -108,7 +108,7 @@ app.add_middleware(CorrelationIDMiddleware)
 @app.get("/", tags=["Health"])
 async def root():
     """Root endpoint"""
-    return {"message": "Secure MCP Server", "status": "operational"}
+    return {"message": "demoSecureMCP", "status": "operational"}
 
 
 @app.get("/health", tags=["Health"])

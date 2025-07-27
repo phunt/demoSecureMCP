@@ -1,6 +1,6 @@
 # Source Code Structure
 
-This directory contains the main application source code for the Secure MCP Server.
+This directory contains the main application source code for the demoSecureMCP.
 
 ## Directory Overview
 

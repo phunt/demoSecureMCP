@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-This directory contains the OAuth 2.1 compliant authentication and authorization implementation for the Secure MCP Server.
+This directory contains the OAuth 2.1 compliant authentication and authorization implementation for the demoSecureMCP.
 
 ## Components
 

@@ -1,6 +1,6 @@
 # Core Utilities & Middleware
 
-This directory contains cross-cutting concerns and shared utilities used throughout the Secure MCP Server application.
+This directory contains cross-cutting concerns and shared utilities used throughout the demoSecureMCP application.
 
 ## Structure
 

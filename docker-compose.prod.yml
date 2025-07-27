@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile.prod  # Use production Dockerfile with Gunicorn
     environment:
       # Non-sensitive configuration can stay as environment variables
-      - APP_NAME=secure-mcp-server
+      - APP_NAME=demoSecureMCP
       - APP_VERSION=0.1.0
       - DEBUG=false
       - LOG_LEVEL=INFO

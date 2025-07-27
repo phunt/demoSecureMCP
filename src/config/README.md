@@ -1,6 +1,6 @@
 # Configuration Management
 
-This directory contains the configuration system for the Secure MCP Server, providing centralized settings management with validation and type safety.
+This directory contains the configuration system for the demoSecureMCP, providing centralized settings management with validation and type safety.
 
 ## Overview
 
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     """Application configuration settings"""
     
     # Application
-    app_name: str = "secure-mcp-server"
+    app_name: str = "demoSecureMCP"
     app_version: str = "0.1.0"
     debug: bool = False
     
@@ -229,7 +229,7 @@ def test_settings_defaults():
         mcp_resource_identifier="test-resource"
     )
     
-    assert settings.app_name == "secure-mcp-server"
+    assert settings.app_name == "demoSecureMCP"
     assert settings.debug is False
     assert settings.mcp_supported_scopes == ["mcp:read", "mcp:write", "mcp:infer"]
 
@@ -302,7 +302,7 @@ async def startup():
 Template for developers:
 ```bash
 # Application
-APP_NAME=secure-mcp-server
+APP_NAME=demoSecureMCP
 DEBUG=false
 LOG_LEVEL=INFO
 
@@ -337,7 +337,7 @@ REQUIRE_HTTPS=true
 ### Using ENV in Dockerfile
 ```dockerfile
 # Set defaults that can be overridden
-ENV APP_NAME=secure-mcp-server
+ENV APP_NAME=demoSecureMCP
 ENV LOG_LEVEL=INFO
 
 # Runtime overrides

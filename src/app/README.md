@@ -1,6 +1,6 @@
 # FastAPI Application with FastMCP Integration
 
-This directory contains the main FastAPI application that serves the Secure MCP Server API, integrating **FastMCP** for Model Context Protocol support with enterprise security.
+This directory contains the main FastAPI application that serves the demoSecureMCP API, integrating **FastMCP** for Model Context Protocol support with enterprise security.
 
 ## Structure
 
