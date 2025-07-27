@@ -1,6 +1,10 @@
 # demoSecureMCP
 
-A production-ready Python implementation of a Model Context Protocol (MCP) server built with **[FastMCP](https://github.com/fastmcp/fastmcp)** and FastAPI, featuring enterprise-grade OAuth 2.1 authentication, leveraging Keycloak for identity management and Docker for deployment.
+This is a WIP - trying to implement a basic secure MCP server (per the spec) along with some infrastructure, including Keycloak for IDP, to try out ideas. Use at your own risk.
+
+There are some "production" aspects captured herein, but that is aspirational at this point in time.
+
+A Python implementation of a Model Context Protocol (MCP) server built with **[FastMCP](https://github.com/fastmcp/fastmcp)** and FastAPI, featuring enterprise-grade OAuth 2.1 authentication, leveraging Keycloak for identity management and Docker for deployment.
 
 ## 🎯 Why This Project Exists
 
