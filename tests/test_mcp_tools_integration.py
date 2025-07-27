@@ -181,7 +181,8 @@ def test_echo_tool():
                 )
             
             if response.status_code == 200:
-                result = response.json()
+                response_data = response.json()
+                result = response_data.get('result', {})
                 print_test("Request successful", "PASS")
                 print_test(f"Original: {result.get('original')}")
                 print_test(f"Processed: {result.get('echo')}")
@@ -278,7 +279,8 @@ def test_timestamp_tool():
                 )
             
             if response.status_code == 200:
-                result = response.json()
+                response_data = response.json()
+                result = response_data.get('result', {})
                 print_test("Request successful", "PASS")
                 print_test(f"Timestamp: {result.get('timestamp')}")
                 print_test(f"Format: {result.get('format')}")
@@ -384,9 +386,10 @@ def test_calculator_tool():
                     print_test(f"Expected error but got: {response.status_code}", "FAIL")
                     all_passed = False
             elif response.status_code == 200:
-                result = response.json()
+                response_data = response.json()
+                result = response_data.get('result', {})
                 print_test("Request successful", "PASS")
-                print_test(f"Result: {result.get('result')}")
+                print_test(f"Result: {result}")
                 print_test(f"Operation: {result.get('operation')}")
                 print_test(f"Operands: {result.get('operands')}")
                 
