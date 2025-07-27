@@ -83,7 +83,29 @@ cp .env.example .env
 ./scripts/docker_manage.sh logs
 ```
 
-### 3. Configure Keycloak
+### 3. Configure Authentication
+
+You can use either Dynamic Client Registration (recommended) or static credentials:
+
+#### Option A: Dynamic Client Registration (Recommended)
+
+```bash
+# Generate and configure DCR
+./scripts/setup_dcr.sh --auto-update
+
+# Restart MCP server to apply
+docker compose restart mcp-server
+```
+
+#### Option B: Static Credentials
+
+```bash
+# Edit .env.docker with static credentials
+# KEYCLOAK_CLIENT_ID=mcp-server
+# KEYCLOAK_CLIENT_SECRET=your-secret
+```
+
+### 4. Test the Setup
 
 1. Access Keycloak at http://localhost:8080
 2. Login with admin/admin_password (change immediately!)
@@ -91,7 +113,7 @@ cp .env.example .env
    - Client: `mcp-server` (confidential)
    - Scopes: `mcp:read`, `mcp:write`, `mcp:infer`
 
-### 4. Test the API
+### 5. Test the API
 
 ```bash
 # Get an access token
@@ -185,6 +207,7 @@ sequenceDiagram
 - **OAuth 2.1 Compliance**: Latest security standards including PKCE
 - **JWT Validation**: Signature verification with JWKS rotation support
 - **Scope-Based Authorization**: Fine-grained access control
+- **Dynamic Client Registration**: No hardcoded credentials, clients register dynamically
 - **Security Headers**: HSTS, CSP, X-Frame-Options via Nginx
 - **Structured Logging**: Security events with correlation IDs
 - **No Hardcoded Secrets**: Environment-based configuration

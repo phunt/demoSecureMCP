@@ -121,28 +121,51 @@ Services can reach each other using their container names as hostnames.
 | `nginx_logs` | Nginx access/error logs | Persistent |
 | `mcp_logs` | Application logs | Persistent |
 
-## Environment Configuration
+## Environment Variables
 
-### Development
+The following environment files are used:
 
-Uses `.env.docker` for configuration:
+- `.env` - Local development
+- `.env.docker` - Docker Compose configuration
+- `.env.example` - Template with all available variables
 
-```bash
-# Internal Docker URLs
+Key variables for Docker:
+
+```env
+# Keycloak connection (use container names)
 KEYCLOAK_URL=http://keycloak:8080
+OAUTH_ISSUER=http://keycloak:8080/realms/mcp-realm
+
+# Redis connection
 REDIS_URL=redis://redis:6379/0
 
-# External URLs (must match token issuer)
-OAUTH_ISSUER=http://localhost:8080/realms/mcp-realm
+# Dynamic Client Registration (optional)
+USE_DCR=true
+DCR_INITIAL_ACCESS_TOKEN=your-token-here
+
+# OR static credentials (if DCR disabled)
+# KEYCLOAK_CLIENT_ID=mcp-server
+# KEYCLOAK_CLIENT_SECRET=your-secret
 ```
 
-### Production
+### Dynamic Client Registration in Docker
 
-Uses `docker-compose.prod.yml` override with:
-- Docker secrets for sensitive data
-- Production-optimized settings
-- Resource limits and reservations
-- Let's Encrypt SSL certificates
+When using DCR in Docker environments:
+
+1. **Generate tokens from inside container**:
+   ```bash
+   docker cp scripts/setup_dcr_docker.sh mcp-server:/tmp/
+   docker compose exec mcp-server sh /tmp/setup_dcr_docker.sh
+   ```
+   This ensures the token has the correct issuer URL (`http://keycloak:8080`).
+
+2. **Use the auto-update option**:
+   ```bash
+   ./scripts/setup_dcr.sh --auto-update
+   ```
+   This avoids interactive prompts that can hang in CI/CD pipelines.
+
+3. **Token whitespace handling**: The DCR client automatically strips whitespace from tokens to handle Docker Compose environment variable behavior.
 
 ## Management Commands
 

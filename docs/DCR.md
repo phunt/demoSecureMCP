@@ -73,13 +73,27 @@ if settings.use_dcr:
 ### Option 1: Using the Setup Script
 
 ```bash
+# For host environments
 ./scripts/setup_dcr.sh
+
+# For Docker environments (run from inside container)
+./scripts/setup_dcr_docker.sh
+```
+
+The setup script supports command-line options:
+- `-a, --auto-update`: Automatically update the environment file without prompting
+- `-e, --env-file FILE`: Specify which environment file to update (default: .env.docker)
+- `-h, --help`: Show usage information
+
+Example:
+```bash
+./scripts/setup_dcr.sh --auto-update --env-file .env.docker
 ```
 
 This script:
 1. Connects to Keycloak admin API
 2. Creates an initial access token
-3. Updates your .env file with DCR settings
+3. Updates your environment file with DCR settings
 4. Provides instructions for next steps
 
 ### Option 2: Manual Configuration
@@ -140,6 +154,30 @@ Keycloak allows configuring policies to control:
 
 ## Operational Aspects
 
+### Docker-Specific Considerations
+
+When running in Docker environments, the initial access token's issuer URL must match the URL used by the container:
+
+- **Host access**: Uses `http://localhost:8080`
+- **Container access**: Uses `http://keycloak:8080`
+
+This mismatch causes "Failed decode token" errors. Solutions:
+
+1. **Use the Docker setup script** (recommended):
+   ```bash
+   docker cp scripts/setup_dcr_docker.sh mcp-server:/tmp/
+   docker compose exec mcp-server sh /tmp/setup_dcr_docker.sh
+   ```
+   This generates tokens with the correct issuer URL.
+
+2. **Configure OAuth issuer correctly**:
+   Ensure `OAUTH_ISSUER` in `.env.docker` uses the container-accessible URL:
+   ```env
+   OAUTH_ISSUER=http://keycloak:8080/realms/mcp-realm
+   ```
+
+3. **Token stripping**: The DCR client automatically strips whitespace from tokens to handle Docker Compose environment variable quirks.
+
 ### Registration Persistence
 
 The DCR client saves registration to `.dcr_client.json`:
@@ -178,11 +216,18 @@ Log messages indicate DCR status:
 2. **Verify Keycloak policies**
    - Check realm settings for client registration
    - Review registration policies
+   - Note: Default policies may reject certain scopes. The DCR client doesn't request specific scopes to avoid policy conflicts.
 
 3. **Check logs**
    ```bash
    docker-compose logs mcp-server | grep -i dcr
+   docker-compose logs keycloak | grep -i "CLIENT_REGISTER"
    ```
+
+4. **Issuer URL mismatch** (Docker environments)
+   - Error: "Failed decode token"
+   - Solution: Use `setup_dcr_docker.sh` from inside container
+   - Verify `OAUTH_ISSUER` matches container networking
 
 #### Client Already Exists
 

@@ -34,8 +34,17 @@ This document provides comprehensive information about all environment variables
 |----------|------|---------|----------|-------------|
 | `KEYCLOAK_URL` | URL | - | **Yes** | Keycloak base URL |
 | `KEYCLOAK_REALM` | string | `mcp-realm` | No | Keycloak realm name |
-| `KEYCLOAK_CLIENT_ID` | string | - | **Yes** | Client ID in Keycloak |
-| `KEYCLOAK_CLIENT_SECRET` | string | - | No | Client secret (required for confidential clients) |
+| `KEYCLOAK_CLIENT_ID` | string | - | Conditional | Client ID (required if DCR is disabled) |
+| `KEYCLOAK_CLIENT_SECRET` | string | - | Conditional | Client secret (required if DCR is disabled) |
+
+### Dynamic Client Registration (DCR)
+
+| Variable | Type | Default | Required | Description |
+|----------|------|---------|----------|-------------|
+| `USE_DCR` | boolean | `false` | No | Enable Dynamic Client Registration |
+| `DCR_INITIAL_ACCESS_TOKEN` | string | - | Conditional | Initial access token (required if DCR is enabled) |
+
+**Note**: Either enable DCR (`USE_DCR=true` with `DCR_INITIAL_ACCESS_TOKEN`) OR provide static credentials (`KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_SECRET`).
 
 ### OAuth Configuration
 

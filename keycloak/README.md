@@ -27,7 +27,15 @@ The MCP server now supports Dynamic Client Registration as per RFC 7591. This al
 
 2. Set up DCR using the provided script:
    ```bash
+   # For host environments
    ./scripts/setup_dcr.sh
+   
+   # For Docker environments (generate token with correct issuer)
+   docker cp scripts/setup_dcr_docker.sh mcp-server:/tmp/
+   docker compose exec mcp-server sh /tmp/setup_dcr_docker.sh
+   
+   # Non-interactive mode
+   ./scripts/setup_dcr.sh --auto-update
    ```
    
    This script will:
@@ -123,12 +131,17 @@ To import a realm configuration, place the JSON file in this directory and resta
 1. **Initial access token expired**
    - Run `./scripts/setup_dcr.sh` again to get a new token
 
-2. **Registration fails**
+2. **"Failed decode token" error in Docker**
+   - This usually means the token was generated with a different issuer URL
+   - Use `setup_dcr_docker.sh` from inside the container instead
+   - Ensure `OAUTH_ISSUER` in `.env.docker` uses `http://keycloak:8080` not `localhost`
+
+3. **Registration fails**
    - Check Keycloak logs: `docker-compose logs keycloak`
    - Verify DCR is enabled in the realm settings
    - Check client registration policies
 
-3. **Client already registered**
+4. **Client already registered**
    - Delete `.dcr_client.json` to force re-registration
    - Or use the existing registration
 
