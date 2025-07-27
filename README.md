@@ -60,7 +60,7 @@ graph TB
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/yourusername/demoSecureMCP.git
+git clone https://github.com/phunt/demoSecureMCP.git
 cd demoSecureMCP
 
 # Copy environment template
