@@ -27,6 +27,7 @@ from src.app.auth.dependencies import (
     RequireMcpWrite,
     RequireMcpInfer
 )
+from src.app.auth.dcr_client import DCRClient
 from src.app.tools.echo import echo_tool, EchoRequest
 from src.app.tools.timestamp import timestamp_tool, TimestampRequest
 from src.app.tools.calculator import calculator_tool, CalculatorRequest
@@ -43,6 +44,33 @@ async def lifespan(app: FastAPI):
     
     # Validate configuration
     validate_and_print()
+    
+    # Handle Dynamic Client Registration if enabled
+    if settings.use_dcr:
+        print("Using Dynamic Client Registration...")
+        if settings.dcr_initial_access_token:
+            print(f"DCR token found (length: {len(settings.dcr_initial_access_token)})")
+            print(f"DCR token repr last 5 chars: {repr(settings.dcr_initial_access_token[-5:])}")
+        else:
+            print("WARNING: No DCR initial access token found!")
+        
+        dcr_client = DCRClient(settings)
+        
+        try:
+            # Register or load existing registration
+            registered_client = await dcr_client.get_or_register_client(
+                initial_access_token=settings.dcr_initial_access_token
+            )
+            
+            # Update settings with DCR credentials
+            settings.keycloak_client_id = registered_client.client_id
+            settings.keycloak_client_secret = registered_client.client_secret
+            
+            print(f"DCR successful - Client ID: {registered_client.client_id}")
+            
+        except Exception as e:
+            print(f"DCR failed: {e}")
+            raise
     
     # Initialize JWT validator
     await jwt_validator.initialize()

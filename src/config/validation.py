@@ -39,12 +39,19 @@ def validate_settings() -> Dict[str, Any]:
     # Check required fields
     required_fields = [
         ('keycloak_url', 'Keycloak URL'),
-        ('keycloak_client_id', 'Keycloak Client ID'),
         ('oauth_issuer', 'OAuth Issuer'),
         ('oauth_audience', 'OAuth Audience'),
         ('oauth_jwks_uri', 'JWKS URI'),
         ('mcp_resource_identifier', 'MCP Resource Identifier'),
     ]
+    
+    # Only require client_id if not using DCR
+    if not settings.use_dcr:
+        required_fields.append(('keycloak_client_id', 'Keycloak Client ID'))
+    else:
+        # When using DCR, check for initial access token
+        if not settings.dcr_initial_access_token:
+            errors.append("DCR Initial Access Token is required when USE_DCR is enabled")
     
     for field, name in required_fields:
         value = getattr(settings, field, None)

@@ -179,3 +179,6 @@ keycloak-data/
 # Temporary files
 tmp/
 temp/ 
+
+# Dynamic Client Registration
+.dcr_client.json 

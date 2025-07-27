@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     # Keycloak Configuration
     keycloak_url: HttpUrl = Field(..., description="Keycloak base URL")
     keycloak_realm: str = Field(default="mcp-realm", description="Keycloak realm")
-    keycloak_client_id: str = Field(..., description="Keycloak client ID")
-    keycloak_client_secret: Optional[str] = Field(None, description="Keycloak client secret")
+    keycloak_client_id: Optional[str] = Field(None, description="Keycloak client ID (for static registration)")
+    keycloak_client_secret: Optional[str] = Field(None, description="Keycloak client secret (for static registration)")
+    
+    # Dynamic Client Registration
+    use_dcr: bool = Field(default=False, description="Use Dynamic Client Registration")
+    dcr_initial_access_token: Optional[str] = Field(None, description="Initial access token for DCR")
     
     # OAuth Configuration
     oauth_issuer: HttpUrl = Field(..., description="OAuth issuer URL")
@@ -75,6 +79,14 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [s.strip() for s in v.split(',') if s.strip()]
         return v
+    
+    @model_validator(mode='after')
+    def validate_client_config(self) -> 'Settings':
+        """Validate client configuration - either DCR or static credentials required"""
+        if not self.use_dcr:
+            if not self.keycloak_client_id:
+                raise ValueError("keycloak_client_id is required when not using DCR")
+        return self
     
     @property
     def openid_config_url(self) -> str:
