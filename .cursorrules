@@ -1,0 +1,102 @@
+role: |
+  Expert in Python, Model Context Protocol (MCP), FastMCP, FastAPI, OAuth 2.1, 
+  JWT validation, Docker, and secure API development. Prioritize security, 
+  clean code, and production-ready implementations.
+
+tech_stack:
+  backend: Python 3.11+, FastMCP, FastAPI, Uvicorn/Gunicorn
+  auth: Keycloak (OAuth 2.1/PKCE), PyJWT, python-jose
+  infrastructure: Docker, Docker Compose, Nginx, Redis
+  testing: pytest, httpx
+  config: Pydantic Settings, python-dotenv
+
+dependency_management:
+  - Always use latest stable versions of dependencies
+  - Pin specific versions in requirements.txt for reproducibility
+  - Regularly update dependencies for security patches
+  - Use semantic versioning constraints (^1.0.0) in development
+  - Test thoroughly after dependency updates
+  - Keep Docker base images current (python:3.11-slim -> python:3.12-slim when stable)
+
+research_tools:
+  - Use web search for latest security best practices and vulnerability information
+  - Search for current implementation patterns and standards for dependencies
+  - Look up latest versions and changelogs for dependencies
+  - Use Context7 for up-to-date library documentation and API references
+  - Research Docker and Kubernetes security recommendations
+  - Find current MCP protocol specifications and updates
+
+project_context: |
+  Production MCP server with OAuth 2.1 compliance, JWT validation, 
+  scope-based authorization, and RFC 9728 Protected Resource Metadata.
+
+documentation:
+  - README.md files should exist for important areas of the codebase
+  - Use Mermaid diagrams for flowcharts, sequence diagrams, and architecture visuals
+  - Include clear examples and usage instructions
+  - Document security considerations and configuration requirements
+
+code_style:
+  - Follow PEP 8 (100 char line limit)
+  - Use type hints for all functions
+  - Async/await for all FastAPI/FastMCP endpoints
+  - Descriptive names: validate_token() not vt()
+  - F-strings over .format() or %
+  - Early returns to reduce nesting
+
+fastapi_patterns:
+  dependency_injection: |
+    @router.get("/protected")
+    async def protected_endpoint(
+        current_user: dict = Depends(get_current_user),
+        settings: Settings = Depends(get_settings)
+    ):
+        return {"user": current_user}
+  
+  scope_authorization: |
+    @router.post("/write")
+    async def write_operation(
+        user: dict = Depends(require_scopes(["mcp:write"]))
+    ):
+        ...
+
+security_requirements:
+  - JWT validation: verify signature, issuer, audience, expiration
+  - JWKS caching: use Redis with TTL for Keycloak JWKS
+  - Error handling: return 401/403, never expose internals
+  - Secrets: environment variables only, never hardcode
+  - Logging: structured JSON logs with correlation IDs
+
+docker_practices:
+  - Multi-stage builds
+  - Non-root user
+  - Health checks
+  - Specific versions (python:3.11-slim)
+  - Service dependencies with condition checks
+  - Reflect carefully on host names within container vs outside compose stack
+
+testing_approach:
+  - Use pytest with async support
+  - Test auth flows, token validation, scope enforcement
+  - Mock external services (Keycloak) when appropriate
+  - Integration tests for critical paths
+
+common_commands:
+  start_services: docker-compose up -d
+  development_mode: ./scripts/docker_manage.sh dev
+  run_tests: python -m pytest tests/
+
+key_endpoints:
+  - For Keycloak, MCP, API, etc... use industry standards
+
+avoid:
+  - Hardcoded secrets or URLs
+  - Synchronous operations in async endpoints
+  - Exposing internal errors to clients
+  - Skipping token validation
+  - Direct database queries (use dependencies)
+  - Creating files without explicit user request
+
+git_conventions:
+  format: "type: description"
+  types: [feat, fix, docs, test, chore] 
