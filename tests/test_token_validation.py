@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config.settings import Settings
 
 # Test configuration
-class TestConfig:
+class ValidationTestConfig:
     def __init__(self):
         self.settings = Settings()
         self.base_url = "https://localhost"
@@ -37,7 +37,7 @@ class TestConfig:
         self.token_endpoint = f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
         self.verify_ssl = False
 
-config = TestConfig()
+config = ValidationTestConfig()
 
 # Color output
 class Colors:

@@ -19,8 +19,20 @@ os.environ["OAUTH_ISSUER"] = "http://localhost:8080/realms/mcp-realm"
 
 from src.config.settings import Settings
 
+# Test configuration
+class ClientTestConfig:
+    def __init__(self):
+        self.settings = Settings()
+        self.base_url = "https://localhost"
+        self.keycloak_url = self.settings.keycloak_url
+        self.keycloak_realm = self.settings.keycloak_realm
+        self.keycloak_client_id = self.settings.keycloak_client_id
+        self.keycloak_client_secret = self.settings.keycloak_client_secret
+        self.verify_ssl = False
+        self.use_dcr = self.settings.use_dcr
+
 # Initialize test configuration
-config = Settings()
+config = ClientTestConfig()
 
 
 class Colors:
@@ -46,16 +58,29 @@ def print_test(message: str, status: str = "INFO") -> None:
 
 
 def get_dcr_client_info() -> Optional[Dict[str, Any]]:
-    """Get DCR client information"""
-    try:
-        with open(".dcr_client.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print_test("DCR client file not found", "FAIL")
-        return None
-    except json.JSONDecodeError:
-        print_test("Invalid DCR client file", "FAIL")
-        return None
+    """Get client information (DCR or static)"""
+    # Check if we're in DCR mode
+    if config.use_dcr:
+        try:
+            with open(".dcr_client.json", "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print_test("DCR client file not found", "FAIL")
+            return None
+        except json.JSONDecodeError:
+            print_test("Invalid DCR client file", "FAIL")
+            return None
+    else:
+        # Use static credentials
+        if config.keycloak_client_id and config.keycloak_client_secret:
+            print_test("Using static client credentials", "INFO")
+            return {
+                "client_id": config.keycloak_client_id,
+                "client_secret": config.keycloak_client_secret
+            }
+        else:
+            print_test("Static client credentials not configured", "FAIL")
+            return None
 
 
 def get_client_credentials_token(scope: str = "mcp:read mcp:write mcp:infer") -> Optional[Dict[str, Any]]:
