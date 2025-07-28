@@ -46,9 +46,15 @@ COPY --chown=mcp:mcp ./src ./src
 # Create directory for logs (if needed)
 RUN mkdir -p /app/logs && chown -R mcp:mcp /app/logs
 
+# Create directory for DCR client data
+RUN mkdir -p /data && chown -R mcp:mcp /data
+
 # Set Python path
 ENV PYTHONPATH=/app:$PYTHONPATH
 ENV PATH=/home/mcp/.local/bin:$PATH
+
+# Set DCR data directory environment variable
+ENV DCR_DATA_DIR=/data
 
 # Switch to non-root user
 USER mcp

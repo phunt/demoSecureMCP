@@ -80,7 +80,7 @@ def get_valid_token() -> Optional[str]:
         print_test(f"Error getting token: {str(e)}", "FAIL")
         return None
 
-def test_endpoint_with_token(token: str, expected_status: int = 200) -> bool:
+def check_endpoint_with_token(token: str, expected_status: int = 200) -> bool:
     """Test accessing protected endpoint with a token"""
     headers = {"Authorization": f"Bearer {token}"}
     
@@ -171,7 +171,7 @@ def test_malformed_tokens():
     
     # Test valid token first
     print_test("\nTesting with valid token")
-    if not test_endpoint_with_token(valid_token, 200):
+    if not check_endpoint_with_token(valid_token, 200):
         print_test("Valid token test failed!", "FAIL")
         assert False, "Test failed"
     # Test various malformations
@@ -193,7 +193,7 @@ def test_malformed_tokens():
         malformed_token = create_malformed_token(valid_token, modification)
         
         # All malformed tokens should result in 401
-        if not test_endpoint_with_token(malformed_token, 401):
+        if not check_endpoint_with_token(malformed_token, 401):
             all_passed = False
     
     return all_passed
@@ -257,7 +257,7 @@ def test_token_claims_validation():
     
     # Test with valid token
     print_test("\nValidating all claims are properly checked")
-    return test_endpoint_with_token(valid_token, 200)
+    return check_endpoint_with_token(valid_token, 200)
 
 def test_special_characters_in_token():
     """Test tokens with special characters"""
@@ -273,7 +273,7 @@ def test_special_characters_in_token():
     all_passed = True
     for description, token in special_tokens:
         print_test(f"\nTesting: {description}")
-        if not test_endpoint_with_token(token, 401):
+        if not check_endpoint_with_token(token, 401):
             all_passed = False
     
     return all_passed

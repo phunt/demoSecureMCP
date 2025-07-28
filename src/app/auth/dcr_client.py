@@ -54,7 +54,9 @@ class DCRClient:
         self.settings = settings
         self.registration_endpoint = None
         self.registered_client: Optional[RegisteredClient] = None
-        self.client_config_file = Path(".dcr_client.json")
+        # Use DCR_DATA_DIR environment variable if set, otherwise use current directory
+        dcr_data_dir = os.environ.get("DCR_DATA_DIR", ".")
+        self.client_config_file = Path(dcr_data_dir) / ".dcr_client.json"
         
     async def discover_registration_endpoint(self) -> str:
         """Discover the DCR endpoint from OAuth metadata"""

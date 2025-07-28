@@ -141,6 +141,7 @@ services:
     volumes:
       - ./src:/app/src:ro  # Mount source code for development
       - mcp_logs:/app/logs
+      - dcr_data:/data      # Mount DCR data directory
     depends_on:
       keycloak:
         condition: service_healthy
@@ -198,4 +199,6 @@ volumes:
   nginx_logs:
     driver: local
   mcp_logs:
+    driver: local 
+  dcr_data:
     driver: local 

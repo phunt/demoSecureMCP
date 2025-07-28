@@ -211,15 +211,90 @@ Key environment files:
 
 ### Running Tests
 
+The project includes comprehensive test suites with detailed reporting capabilities.
+
+### Test Reports
+
+All test outputs are generated in the `test-results/` directory:
+
+- **JUnit XML**: `test-results/junit.xml` - CI/CD compatible test results
+- **HTML Report**: `test-results/report.html` - Detailed interactive test report  
+- **Coverage HTML**: `test-results/coverage-html/index.html` - Code coverage report
+- **Coverage XML**: `test-results/coverage.xml` - CI/CD compatible coverage data
+
+### Running Tests
+
+#### Option 1: Comprehensive Test Runner (Recommended)
 ```bash
-# Run all tests
-python -m pytest tests/
+# Run all tests with full reporting
+python tests/run_all_tests.py
 
-# Run specific test suite
-python -m pytest tests/test_token_validation.py -v
+# Or use make
+make test
+```
 
-# Run with coverage
-python -m pytest --cov=src tests/
+#### Option 2: Direct pytest
+```bash
+# Setup test environment first
+./scripts/setup_test_environment.sh
+
+# Run pytest directly  
+pytest tests/
+
+# Or use make
+make pytest
+```
+
+#### Option 3: Individual Test Files
+```bash
+# Run specific test file
+pytest tests/test_token_validation.py -v
+```
+
+### Test Configuration
+
+The test suite uses pytest with the following features:
+
+- **Async Support**: Full async/await testing with pytest-asyncio
+- **Coverage Reporting**: Code coverage analysis with pytest-cov
+- **HTML Reports**: Interactive test and coverage reports  
+- **JUnit XML**: CI/CD integration support
+- **Timeout Protection**: 5-minute test timeout to prevent hangs
+
+Configuration files:
+- `pytest.ini` - Main pytest configuration
+- `.coveragerc` - Coverage reporting settings
+
+### Viewing Reports
+
+After running tests:
+
+```bash
+# Open test reports automatically
+make test-reports
+
+# Or manually open in browser
+open test-results/report.html                    # Test results
+open test-results/coverage-html/index.html      # Coverage report
+```
+
+### Development Commands
+
+```bash
+# Set up development environment
+make install-dev
+
+# Run linting
+make lint
+
+# Format code  
+make format
+
+# Type checking
+make type-check
+
+# Clean test artifacts
+make test-clean
 ```
 
 ## 📁 Project Structure

@@ -1,121 +1,113 @@
 #!/usr/bin/env python3
 """
-Test OAuth 2.0 Client Credentials Flow
+OAuth 2.0 Client Credentials Flow Test Suite
 
-This script tests the complete client credentials flow:
-1. Obtain access token from Keycloak
-2. Use token to access protected endpoints
-3. Verify token expiration and refresh
+Tests client credentials flow, token validation, and endpoint access patterns.
 """
 
-import os
-import sys
-import time
 import json
-from typing import Dict, Optional
 import httpx
+import time
 from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Set test environment early
+import os
+os.environ["TESTING"] = "true"
+os.environ["CONTAINER_ENV"] = "false"
+os.environ["OAUTH_ISSUER"] = "http://localhost:8080/realms/mcp-realm"
 
 from src.config.settings import Settings
 
-# Color output
+# Initialize test configuration
+config = Settings()
+
+
 class Colors:
     GREEN = '\033[92m'
     RED = '\033[91m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
+    CYAN = '\033[96m'
     END = '\033[0m'
+    BOLD = '\033[1m'
 
-def print_test(message: str, status: str = "INFO"):
-    color = Colors.BLUE
+
+def print_test(message: str, status: str = "INFO") -> None:
+    """Print colored test output"""
     if status == "PASS":
-        color = Colors.GREEN
+        print(f"[{Colors.GREEN}PASS{Colors.END}] {message}")
     elif status == "FAIL":
-        color = Colors.RED
-    elif status == "WARN":
-        color = Colors.YELLOW
+        print(f"[{Colors.RED}FAIL{Colors.END}] {message}")
+    elif status == "INFO":
+        print(f"[{Colors.BLUE}INFO{Colors.END}] {message}")
+    else:
+        print(f"[{status}] {message}")
+
+
+def get_dcr_client_info() -> Optional[Dict[str, Any]]:
+    """Get DCR client information"""
+    try:
+        with open(".dcr_client.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print_test("DCR client file not found", "FAIL")
+        return None
+    except json.JSONDecodeError:
+        print_test("Invalid DCR client file", "FAIL")
+        return None
+
+
+def get_client_credentials_token(scope: str = "mcp:read mcp:write mcp:infer") -> Optional[Dict[str, Any]]:
+    """Get access token using client credentials flow"""
+    dcr_client = get_dcr_client_info()
+    if not dcr_client:
+        return None
+
+    client_id = dcr_client["client_id"]
+    client_secret = dcr_client["client_secret"]
     
-    print(f"{color}[{status}]{Colors.END} {message}")
-
-# Test configuration
-class Config:
-    def __init__(self):
-        self.settings = Settings()
-        self.base_url = "https://localhost"  # Via Nginx
-        self.keycloak_url = self.settings.keycloak_url
-        self.realm = self.settings.keycloak_realm
-        self.token_endpoint = f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
-        self.verify_ssl = False  # For self-signed certs in dev
-        
-        # Get client credentials - fetch from DCR if enabled
-        if self.settings.use_dcr:
-            self._fetch_dcr_credentials()
-        else:
-            self.client_id = self.settings.keycloak_client_id
-            self.client_secret = self.settings.keycloak_client_secret
-    
-    def _fetch_dcr_credentials(self):
-        """Fetch dynamically registered client credentials"""
-        try:
-            with httpx.Client(verify=self.verify_ssl) as client:
-                response = client.get(f"{self.base_url}/api/v1/dcr-info")
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("dcr_enabled") and data.get("client_id"):
-                        self.client_id = data["client_id"]
-                        self.client_secret = data["client_secret"]
-                        print_test(f"Using DCR client: {self.client_id}", "INFO")
-                        return
-        except Exception as e:
-            print_test(f"Failed to fetch DCR credentials: {e}", "WARN")
-        
-        # Fallback to static credentials
-        self.client_id = self.settings.keycloak_client_id
-        self.client_secret = self.settings.keycloak_client_secret
-
-config = Config()
-
-def get_client_credentials_token(scope: Optional[str] = None) -> Optional[Dict]:
-    """Obtain an access token using client credentials flow"""
+    print_test(f"Using DCR client: {client_id}")
     print_test("Requesting access token via client credentials flow")
+
+    token_endpoint = f"{config.keycloak_url}/realms/{config.keycloak_realm}/protocol/openid-connect/token"
+    
+    # Update OAuth audience to match client ID
+    os.environ["OAUTH_AUDIENCE"] = client_id
     
     data = {
         "grant_type": "client_credentials",
-        "client_id": config.client_id,
-        "client_secret": config.client_secret,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "scope": scope
     }
-    
-    if scope:
-        data["scope"] = scope
-    
+
     try:
         with httpx.Client(verify=config.verify_ssl) as client:
-            response = client.post(config.token_endpoint, data=data)
-            
+            response = client.post(token_endpoint, data=data)
+
         if response.status_code == 200:
             token_data = response.json()
-            print_test(f"Token obtained successfully (expires in {token_data.get('expires_in', 'unknown')} seconds)", "PASS")
+            expires_in = token_data.get("expires_in", 300)
+            print_test(f"Token obtained successfully (expires in {expires_in} seconds)", "PASS")
             
-            # Decode token payload (without verification, just for display)
-            if "access_token" in token_data:
-                import base64
-                parts = token_data["access_token"].split(".")
-                if len(parts) >= 2:
-                    # Add padding if needed
-                    payload = parts[1] + "=" * (4 - len(parts[1]) % 4)
-                    decoded = json.loads(base64.urlsafe_b64decode(payload))
-                    print_test(f"Token scopes: {decoded.get('scope', 'No scopes')}")
-                    print_test(f"Token audience: {decoded.get('aud', decoded.get('azp', 'No audience'))}")
+            # Print token info for debugging
+            if "scope" in token_data:
+                print_test(f"Token scopes: {token_data['scope']}")
+            
+            # Check if we have azp claim
+            import jwt
+            payload = jwt.decode(token_data["access_token"], options={"verify_signature": False})
+            if "azp" in payload:
+                print_test(f"Token audience: {payload['azp']}")
             
             return token_data
         else:
-            print_test(f"Failed to obtain token: {response.status_code} - {response.text}", "FAIL")
+            print_test(f"Failed to get token: {response.status_code} - {response.text}", "FAIL")
             return None
+
     except Exception as e:
-        print_test(f"Error obtaining token: {str(e)}", "FAIL")
+        print_test(f"Error getting token: {str(e)}", "FAIL")
         return None
 
 def check_protected_endpoint(endpoint: str, token: str, expected_status: int = 200) -> bool:
@@ -312,7 +304,7 @@ if __name__ == "__main__":
     try:
         with httpx.Client(verify=config.verify_ssl) as client:
             # Check Keycloak
-            keycloak_response = client.get(f"{config.keycloak_url}/realms/{config.realm}/.well-known/openid-configuration", timeout=5)
+            keycloak_response = client.get(f"{config.keycloak_url}/realms/{config.keycloak_realm}/.well-known/openid-configuration", timeout=5)
             if keycloak_response.status_code != 200:
                 print_test("Keycloak is not ready. Please ensure Docker services are running.", "FAIL")
                 sys.exit(1)

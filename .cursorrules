@@ -22,6 +22,8 @@ tech_stack:
   config: Pydantic Settings, python-dotenv
 
 dependency_management:
+  - Check if a python virtual environment is active before running commands
+  - If a virtual environment is not active, activate it with `source .venv/bin/activate`
   - Always use latest stable versions of dependencies
   - Pin specific versions in requirements.txt for reproducibility
   - Regularly update dependencies for security patches
