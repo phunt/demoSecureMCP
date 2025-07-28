@@ -86,7 +86,7 @@ def test_endpoint_with_token(token: str, expected_status: int = 200) -> bool:
     
     try:
         with httpx.Client(verify=config.verify_ssl) as client:
-            response = client.get(f"{config.base_url}/api/v1/me", headers=headers)
+            response = client.get(f"{config.base_url}/api/v1/user", headers=headers)
         
         success = response.status_code == expected_status
         if success:
@@ -222,7 +222,7 @@ def test_token_in_different_positions():
         
         try:
             with httpx.Client(verify=config.verify_ssl) as client:
-                response = client.get(f"{config.base_url}/api/v1/me", headers=headers)
+                response = client.get(f"{config.base_url}/api/v1/user", headers=headers)
             
             expected_statuses = expected_status if isinstance(expected_status, list) else [expected_status]
             if response.status_code in expected_statuses:

@@ -79,8 +79,9 @@ security_requirements:
   - Logging: structured JSON logs with correlation IDs
 
 troubleshooting:
-  - when troubleshooting authentication failures in containers verify the jwt
+  - when troubleshooting authentication failures in containers you can decode the jwt verify the contents
   - when restarting docker containers try to minizize the number of containers to restart
+  - when troubleshooting authentication failures the keycloak container logs may provide insight
 
 docker_practices:
   - Multi-stage builds

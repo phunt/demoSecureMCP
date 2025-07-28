@@ -121,7 +121,7 @@ services:
       - DCR_INITIAL_ACCESS_TOKEN=${DCR_INITIAL_ACCESS_TOKEN:-}
       
       # OAuth configuration (issuer must match tokens)
-      - OAUTH_ISSUER=${OAUTH_ISSUER:-http://localhost:8080/realms/mcp-realm}
+      - OAUTH_ISSUER=${OAUTH_ISSUER:-http://keycloak:8080/realms/mcp-realm}
       - OAUTH_AUDIENCE=${OAUTH_AUDIENCE:-mcp-server}
       - JWT_ALGORITHMS=${JWT_ALGORITHMS:-RS256,RS384,RS512}
       - JWT_LEEWAY=${JWT_LEEWAY:-10}

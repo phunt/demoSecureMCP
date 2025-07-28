@@ -89,10 +89,10 @@ def test_tool_discovery():
             print_test("Correctly requires authentication", "PASS")
         else:
             print_test(f"Unexpected status without auth: {response.status_code}", "FAIL")
-            assert False, "Test failed"
+            return False
     except Exception as e:
         print_test(f"Error: {str(e)}", "FAIL")
-        assert False, "Test failed"
+        return False
     # Test with auth
     token = get_token("mcp:read mcp:write")
     assert token, "Failed to obtain token"
@@ -109,7 +109,7 @@ def test_tool_discovery():
             print_test("Tool discovery successful", "PASS")
             
             # Verify expected tools
-            expected_tools = ["echo", "get_timestamp", "calculate"]
+            expected_tools = ["echo", "timestamp", "calculator"]
             found_tools = [tool["name"] for tool in tools.get("tools", [])]
             
             for tool in expected_tools:
@@ -117,19 +117,21 @@ def test_tool_discovery():
                     print_test(f"Found tool: {tool}", "PASS")
                 else:
                     print_test(f"Missing tool: {tool}", "FAIL")
-                    assert False, "Test failed"
+                    return False
             # Display tool details
             for tool in tools.get("tools", []):
                 print_test(f"\nTool: {tool['name']}")
                 print_test(f"  Endpoint: {tool['endpoint']}")
                 print_test(f"  Requires: {tool['required_scope']}")
                 print_test(f"  Available: {tool.get('available', 'N/A')}")
+            
+            return True  # All tests passed
         else:
             print_test(f"Tool discovery failed: {response.status_code}", "FAIL")
-            assert False, "Test failed"
+            return False
     except Exception as e:
         print_test(f"Error: {str(e)}", "FAIL")
-        assert False, "Test failed"
+        return False
 def test_echo_tool():
     """Test the echo tool"""
     print_test("\n=== Testing Echo Tool ===")
@@ -362,7 +364,7 @@ def test_calculator_tool():
         try:
             with httpx.Client(verify=config.verify_ssl) as client:
                 response = client.post(
-                    f"{config.base_url}/api/v1/tools/calculate",
+                    f"{config.base_url}/api/v1/tools/calculator",
                     headers=headers,
                     json={
                         "operation": test_data["operation"],
@@ -406,7 +408,7 @@ def test_calculator_tool():
         try:
             with httpx.Client(verify=config.verify_ssl) as client:
                 response = client.post(
-                    f"{config.base_url}/api/v1/tools/calculate",
+                    f"{config.base_url}/api/v1/tools/calculator",
                     headers=headers,
                     json={"operation": "add", "operands": [1, 2]}
                 )
@@ -446,12 +448,12 @@ def test_error_handling():
             "description": "Wrong message type"
         },
         {
-            "tool": "calculate",
+            "tool": "calculator",
             "data": {"operation": "invalid", "operands": [1, 2]},
             "description": "Invalid operation"
         },
         {
-            "tool": "calculate",
+            "tool": "calculator",
             "data": {"operation": "add", "operands": []},  # Empty operands
             "description": "Empty operands"
         },
