@@ -1,192 +1,207 @@
-"""FastAPI authentication dependencies"""
+"""Authentication dependencies for FastAPI endpoints
 
-from typing import List, Optional, Annotated
+Provides dependency injection functions for token validation and authorization.
+"""
 
-from fastapi import Depends, HTTPException, status, Request
+from typing import Optional, List, Callable
+from functools import lru_cache
+
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jwt.exceptions import InvalidTokenError
 
 from src.app.auth.jwt_validator import jwt_validator, TokenPayload
-from src.core.logging import security_logger
+from src.core.logging import get_logger, security_logger
 
+logger = get_logger(__name__)
 
 # Security scheme for OpenAPI documentation
-security_scheme = HTTPBearer(
-    scheme_name="OAuth2",
-    description="Bearer token using JWT from Keycloak",
+security = HTTPBearer(
+    scheme_name="Bearer",
+    description="OAuth 2.0 Bearer Token",
     bearerFormat="JWT",
     auto_error=True
 )
 
 
-async def get_token(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security_scheme)]
+async def get_token_from_header(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> str:
-    """Extract token from Authorization header"""
+    """
+    Extract and validate bearer token from Authorization header
+    
+    Args:
+        credentials: HTTP authorization credentials from header
+        
+    Returns:
+        str: The bearer token
+        
+    Raises:
+        HTTPException: If token is missing or malformed
+    """
+    if not credentials:
+        logger.warning("Missing authorization header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header missing",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    if credentials.scheme.lower() != "bearer":
+        logger.warning(f"Invalid authorization scheme: {credentials.scheme}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication scheme",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
     return credentials.credentials
 
 
 async def get_current_user(
-    token: Annotated[str, Depends(get_token)],
-    request: Request
+    token: str = Depends(get_token_from_header)
 ) -> TokenPayload:
     """
-    Get current authenticated user from JWT token
+    Validate JWT token and return the current user's token payload
     
     Args:
-        token: JWT token from Authorization header
-        request: FastAPI request object
+        token: JWT bearer token from Authorization header
         
     Returns:
-        TokenPayload: Validated token payload with user info
+        TokenPayload: Validated token payload with user information
         
     Raises:
-        HTTPException: 401 if token is invalid
+        HTTPException: If token validation fails
     """
-    client_ip = getattr(request.state, "client_ip", None)
-    
     try:
+        # Validate token and get payload
         payload = await jwt_validator.validate_token(token)
         
-        # Store user info in request state
-        request.state.user_id = payload.sub
-        request.state.user_scopes = jwt_validator.extract_scopes(payload)
-        
         # Log successful authentication
-        security_logger.log_authentication_attempt(
+        security_logger.log_auth_attempt(
             success=True,
             user_id=payload.sub,
-            client_ip=client_ip,
-            extra={"preferred_username": payload.preferred_username}
+            client_id=payload.client_id
         )
         
         return payload
-    except InvalidTokenError as e:
-        security_logger.log_authentication_attempt(
-            success=False,
-            client_ip=client_ip,
-            error=str(e)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        
+    except HTTPException:
+        # Re-raise FastAPI exceptions
+        raise
     except Exception as e:
-        security_logger.log_authentication_attempt(
+        # Log failed authentication
+        security_logger.log_auth_attempt(
             success=False,
-            client_ip=client_ip,
-            error=f"Unexpected error: {str(e)}"
+            reason=str(e)
         )
+        
+        logger.error(f"Token validation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"}
         )
 
 
-def require_scope(scope: str):
+def require_scope(scope: str) -> Callable:
     """
-    Create a dependency that requires a specific scope
+    Create a dependency that requires a specific OAuth scope
     
     Args:
-        scope: Required scope
+        scope: The required OAuth scope
         
     Returns:
-        Dependency function that validates the scope
+        Callable: A FastAPI dependency function
     """
     async def scope_checker(
-        current_user: Annotated[TokenPayload, Depends(get_current_user)],
-        request: Request
+        current_user: TokenPayload = Depends(get_current_user)
     ) -> TokenPayload:
-        has_scope = jwt_validator.has_scope(current_user, scope)
-        client_ip = getattr(request.state, "client_ip", None)
+        """Check if the current user has the required scope"""
+        scopes = jwt_validator.extract_scopes(current_user)
         
-        # Log authorization decision
-        security_logger.log_authorization_decision(
+        has_scope = scope in scopes
+        
+        # Log authorization check
+        security_logger.log_authorization_check(
+            resource="API",
+            action=scope,
+            granted=has_scope,
             user_id=current_user.sub,
-            resource=request.url.path,
-            action=request.method,
-            allowed=has_scope,
-            required_scope=scope,
-            user_scopes=jwt_validator.extract_scopes(current_user),
-            client_ip=client_ip
+            required_scope=scope
         )
         
         if not has_scope:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required scope: {scope}"
+                detail=f"Insufficient permissions. Required: {scope}"
             )
         return current_user
     
     return scope_checker
 
 
-def require_any_scope(scopes: List[str]):
+def require_any_scope(scopes: List[str]) -> Callable:
     """
-    Create a dependency that requires any of the specified scopes
+    Create a dependency that requires any of the specified OAuth scopes
     
     Args:
-        scopes: List of allowed scopes
+        scopes: List of OAuth scopes (user needs at least one)
         
     Returns:
-        Dependency function that validates the scopes
+        Callable: A FastAPI dependency function
     """
     async def scope_checker(
-        current_user: Annotated[TokenPayload, Depends(get_current_user)],
-        request: Request
+        current_user: TokenPayload = Depends(get_current_user)
     ) -> TokenPayload:
-        has_scope = jwt_validator.has_any_scope(current_user, scopes)
-        client_ip = getattr(request.state, "client_ip", None)
+        """Check if the current user has any of the required scopes"""
+        user_scopes = jwt_validator.extract_scopes(current_user)
         
-        # Log authorization decision
-        security_logger.log_authorization_decision(
+        has_scope = any(scope in user_scopes for scope in scopes)
+        
+        # Log authorization check
+        security_logger.log_authorization_check(
+            resource="API",
+            action=f"any of: {', '.join(scopes)}",
+            granted=has_scope,
             user_id=current_user.sub,
-            resource=request.url.path,
-            action=request.method,
-            allowed=has_scope,
-            required_scope=f"any of: {', '.join(scopes)}",
-            user_scopes=jwt_validator.extract_scopes(current_user),
-            client_ip=client_ip
+            required_scope=f"any of: {', '.join(scopes)}"
         )
         
         if not has_scope:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required one of: {', '.join(scopes)}"
+                detail=f"Insufficient permissions. Required any of: {', '.join(scopes)}"
             )
         return current_user
     
     return scope_checker
 
 
-def require_all_scopes(scopes: List[str]):
+def require_all_scopes(scopes: List[str]) -> Callable:
     """
-    Create a dependency that requires all specified scopes
+    Create a dependency that requires all of the specified OAuth scopes
     
     Args:
-        scopes: List of required scopes
+        scopes: List of OAuth scopes (user needs all of them)
         
     Returns:
-        Dependency function that validates the scopes
+        Callable: A FastAPI dependency function
     """
     async def scope_checker(
-        current_user: Annotated[TokenPayload, Depends(get_current_user)],
-        request: Request
+        current_user: TokenPayload = Depends(get_current_user)
     ) -> TokenPayload:
-        has_scope = jwt_validator.has_all_scopes(current_user, scopes)
-        client_ip = getattr(request.state, "client_ip", None)
+        """Check if the current user has all required scopes"""
+        user_scopes = jwt_validator.extract_scopes(current_user)
         
-        # Log authorization decision
-        security_logger.log_authorization_decision(
+        has_scope = all(scope in user_scopes for scope in scopes)
+        
+        # Log authorization check
+        security_logger.log_authorization_check(
+            resource="API",
+            action=f"all of: {', '.join(scopes)}",
+            granted=has_scope,
             user_id=current_user.sub,
-            resource=request.url.path,
-            action=request.method,
-            allowed=has_scope,
-            required_scope=f"all of: {', '.join(scopes)}",
-            user_scopes=jwt_validator.extract_scopes(current_user),
-            client_ip=client_ip
+            required_scope=f"all of: {', '.join(scopes)}"
         )
         
         if not has_scope:
@@ -200,7 +215,7 @@ def require_all_scopes(scopes: List[str]):
 
 
 # Pre-defined scope dependencies for MCP operations
-RequireMcpRead = Depends(require_scope("mcp:read"))
-RequireMcpWrite = Depends(require_scope("mcp:write"))
-RequireMcpInfer = Depends(require_scope("mcp:infer"))
-RequireMcpAny = Depends(require_any_scope(["mcp:read", "mcp:write", "mcp:infer"])) 
+RequireMcpRead = require_scope("mcp:read")
+RequireMcpWrite = require_scope("mcp:write")
+RequireMcpInfer = require_scope("mcp:infer")
+RequireMcpAny = require_any_scope(["mcp:read", "mcp:write", "mcp:infer"]) 

@@ -21,20 +21,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config.settings import Settings
 
-# Test configuration
-class TestConfig:
-    def __init__(self):
-        self.settings = Settings()
-        self.base_url = "https://localhost"  # Via Nginx
-        self.keycloak_url = self.settings.keycloak_url
-        self.realm = self.settings.keycloak_realm
-        self.client_id = self.settings.keycloak_client_id
-        self.client_secret = self.settings.keycloak_client_secret
-        self.token_endpoint = f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
-        self.verify_ssl = False  # For self-signed certs in dev
-
-config = TestConfig()
-
 # Color output
 class Colors:
     GREEN = '\033[92m'
@@ -53,6 +39,44 @@ def print_test(message: str, status: str = "INFO"):
         color = Colors.YELLOW
     
     print(f"{color}[{status}]{Colors.END} {message}")
+
+# Test configuration
+class Config:
+    def __init__(self):
+        self.settings = Settings()
+        self.base_url = "https://localhost"  # Via Nginx
+        self.keycloak_url = self.settings.keycloak_url
+        self.realm = self.settings.keycloak_realm
+        self.token_endpoint = f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
+        self.verify_ssl = False  # For self-signed certs in dev
+        
+        # Get client credentials - fetch from DCR if enabled
+        if self.settings.use_dcr:
+            self._fetch_dcr_credentials()
+        else:
+            self.client_id = self.settings.keycloak_client_id
+            self.client_secret = self.settings.keycloak_client_secret
+    
+    def _fetch_dcr_credentials(self):
+        """Fetch dynamically registered client credentials"""
+        try:
+            with httpx.Client(verify=self.verify_ssl) as client:
+                response = client.get(f"{self.base_url}/api/v1/dcr-info")
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("dcr_enabled") and data.get("client_id"):
+                        self.client_id = data["client_id"]
+                        self.client_secret = data["client_secret"]
+                        print_test(f"Using DCR client: {self.client_id}", "INFO")
+                        return
+        except Exception as e:
+            print_test(f"Failed to fetch DCR credentials: {e}", "WARN")
+        
+        # Fallback to static credentials
+        self.client_id = self.settings.keycloak_client_id
+        self.client_secret = self.settings.keycloak_client_secret
+
+config = Config()
 
 def get_client_credentials_token(scope: Optional[str] = None) -> Optional[Dict]:
     """Obtain an access token using client credentials flow"""
@@ -94,8 +118,8 @@ def get_client_credentials_token(scope: Optional[str] = None) -> Optional[Dict]:
         print_test(f"Error obtaining token: {str(e)}", "FAIL")
         return None
 
-def test_protected_endpoint(endpoint: str, token: str, expected_status: int = 200) -> bool:
-    """Test accessing a protected endpoint with a token"""
+def check_protected_endpoint(endpoint: str, token: str, expected_status: int = 200) -> bool:
+    """Check accessing a protected endpoint with a token"""
     print_test(f"Testing endpoint: {endpoint}")
     
     headers = {"Authorization": f"Bearer {token}"}
@@ -133,12 +157,8 @@ def test_no_token_access():
                 print_test(f"Correctly rejected with status {response.status_code}", "PASS")
             else:
                 print_test(f"Unexpected status {response.status_code} - endpoint may not be protected!", "FAIL")
-                return False
         except Exception as e:
             print_test(f"Error: {str(e)}", "FAIL")
-            return False
-    
-    return True
 
 def test_token_expiration():
     """Test token expiration handling"""
@@ -146,15 +166,13 @@ def test_token_expiration():
     
     # Get a token
     token_data = get_client_credentials_token()
-    if not token_data:
-        return False
+    assert token_data, "Failed to obtain token"
     
     token = token_data["access_token"]
     expires_in = token_data.get("expires_in", 300)
     
     # Test with valid token
-    if not test_protected_endpoint("/api/v1/me", token):
-        return False
+    assert check_protected_endpoint("/api/v1/me", token), "Failed to access endpoint with valid token"
     
     # Calculate expiration time
     expiry_time = datetime.now() + timedelta(seconds=expires_in)
@@ -165,11 +183,9 @@ def test_token_expiration():
     print_test("Testing with invalid/expired token")
     invalid_token = token[:-10] + "invalid123"  # Corrupt the token
     
-    if test_protected_endpoint("/api/v1/me", invalid_token, expected_status=401):
-        print_test("Correctly rejected expired/invalid token", "PASS")
-        return True
-    else:
-        return False
+    assert check_protected_endpoint("/api/v1/me", invalid_token, expected_status=401), \
+        "Failed to reject invalid token"
+    print_test("Correctly rejected expired/invalid token", "PASS")
 
 def test_scope_requirements():
     """Test scope-based authorization"""
@@ -178,40 +194,37 @@ def test_scope_requirements():
     # Test 1: Get token with specific scopes
     print_test("Testing with mcp:read scope")
     token_data = get_client_credentials_token(scope="mcp:read")
-    if not token_data:
-        return False
+    assert token_data, "Failed to obtain token with mcp:read scope"
     
     read_token = token_data["access_token"]
     
     # Should work for read endpoints
-    test_protected_endpoint("/api/v1/protected/read", read_token)
-    test_protected_endpoint("/api/v1/tools/echo", read_token, expected_status=405)  # GET not allowed
+    check_protected_endpoint("/api/v1/protected/read", read_token)
+    check_protected_endpoint("/api/v1/tools/echo", read_token, expected_status=405)  # GET not allowed
     
     # Test 2: Try write endpoint with read token (should fail)
     print_test("\nTesting write endpoint with read-only token")
-    test_protected_endpoint("/api/v1/protected/write", read_token, expected_status=403)
+    check_protected_endpoint("/api/v1/protected/write", read_token, expected_status=403)
     
     # Test 3: Get token with write scope
     print_test("\nTesting with mcp:write scope")
     token_data = get_client_credentials_token(scope="mcp:write")
-    if not token_data:
-        return False
+    assert token_data, "Failed to obtain token with mcp:write scope"
     
     write_token = token_data["access_token"]
-    test_protected_endpoint("/api/v1/protected/write", write_token)
+    check_protected_endpoint("/api/v1/protected/write", write_token)
     
     # Test 4: Get token with all scopes
     print_test("\nTesting with all scopes")
     token_data = get_client_credentials_token(scope="mcp:read mcp:write mcp:infer")
-    if not token_data:
-        return False
+    assert token_data, "Failed to obtain token with all scopes"
     
     full_token = token_data["access_token"]
-    test_protected_endpoint("/api/v1/protected/read", full_token)
-    test_protected_endpoint("/api/v1/protected/write", full_token)
-    test_protected_endpoint("/api/v1/protected/infer", full_token)
+    check_protected_endpoint("/api/v1/protected/read", full_token)
+    check_protected_endpoint("/api/v1/protected/write", full_token)
+    check_protected_endpoint("/api/v1/protected/infer", full_token)
     
-    return True
+    print_test("All scope-based authorization tests passed", "PASS")
 
 def test_metadata_endpoints():
     """Test public metadata endpoints"""
@@ -229,21 +242,23 @@ def test_metadata_endpoints():
             with httpx.Client(verify=config.verify_ssl) as client:
                 response = client.get(f"{config.base_url}{endpoint}")
             
-            if response.status_code == 200:
-                print_test(f"{description} accessible", "PASS")
-                if endpoint == "/.well-known/oauth-protected-resource":
-                    metadata = response.json()
-                    print_test(f"Issuer: {metadata.get('issuer')}")
-                    print_test(f"Resource: {metadata.get('resource')}")
-                    print_test(f"Scopes: {metadata.get('scopes_supported')}")
-            else:
-                print_test(f"Failed to access {description}: {response.status_code}", "FAIL")
-                return False
+            assert response.status_code == 200, \
+                f"Failed to access {description}: {response.status_code}"
+            
+            print_test(f"{description} accessible", "PASS")
+            if endpoint == "/.well-known/oauth-protected-resource":
+                metadata = response.json()
+                print_test(f"Issuer: {metadata.get('issuer')}")
+                print_test(f"Resource: {metadata.get('resource')}")
+                print_test(f"Scopes: {metadata.get('scopes_supported')}")
+                
+        except AssertionError:
+            raise
         except Exception as e:
             print_test(f"Error: {str(e)}", "FAIL")
-            return False
+            assert False, f"Error accessing {description}: {str(e)}"
     
-    return True
+    print_test("All metadata endpoints accessible", "PASS")
 
 def run_all_tests():
     """Run all client credentials flow tests"""
@@ -266,7 +281,7 @@ def run_all_tests():
         # Test 4: Protected endpoint access
         print_test("\n=== Testing Protected Endpoints ===")
         token = token_data["access_token"]
-        results.append(("Protected Endpoints", test_protected_endpoint("/api/v1/me", token)))
+        results.append(("Protected Endpoints", check_protected_endpoint("/api/v1/me", token)))
         
         # Test 5: Scope requirements
         results.append(("Scope Requirements", test_scope_requirements()))

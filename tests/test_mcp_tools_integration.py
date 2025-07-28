@@ -89,15 +89,13 @@ def test_tool_discovery():
             print_test("Correctly requires authentication", "PASS")
         else:
             print_test(f"Unexpected status without auth: {response.status_code}", "FAIL")
-            return False
+            assert False, "Test failed"
     except Exception as e:
         print_test(f"Error: {str(e)}", "FAIL")
-        return False
-    
+        assert False, "Test failed"
     # Test with auth
     token = get_token("mcp:read mcp:write")
-    if not token:
-        return False
+    assert token, "Failed to obtain token"
     
     headers = {"Authorization": f"Bearer {token}"}
     
@@ -119,31 +117,26 @@ def test_tool_discovery():
                     print_test(f"Found tool: {tool}", "PASS")
                 else:
                     print_test(f"Missing tool: {tool}", "FAIL")
-                    return False
-            
+                    assert False, "Test failed"
             # Display tool details
             for tool in tools.get("tools", []):
                 print_test(f"\nTool: {tool['name']}")
                 print_test(f"  Endpoint: {tool['endpoint']}")
                 print_test(f"  Requires: {tool['required_scope']}")
                 print_test(f"  Available: {tool.get('available', 'N/A')}")
-            
-            return True
         else:
             print_test(f"Tool discovery failed: {response.status_code}", "FAIL")
-            return False
+            assert False, "Test failed"
     except Exception as e:
         print_test(f"Error: {str(e)}", "FAIL")
-        return False
-
+        assert False, "Test failed"
 def test_echo_tool():
     """Test the echo tool"""
     print_test("\n=== Testing Echo Tool ===")
     
     # Get token with read scope
     token = get_token("mcp:read")
-    if not token:
-        return False
+    assert token, "Failed to obtain token"
     
     headers = {
         "Authorization": f"Bearer {token}",
@@ -241,8 +234,7 @@ def test_timestamp_tool():
     
     # Get token with read scope
     token = get_token("mcp:read")
-    if not token:
-        return False
+    assert token, "Failed to obtain token"
     
     headers = {
         "Authorization": f"Bearer {token}",
@@ -318,8 +310,7 @@ def test_calculator_tool():
     
     # Get token with write scope
     token = get_token("mcp:write")
-    if not token:
-        return False
+    assert token, "Failed to obtain token"
     
     headers = {
         "Authorization": f"Bearer {token}",
@@ -436,8 +427,7 @@ def test_error_handling():
     print_test("\n=== Testing Error Handling ===")
     
     token = get_token("mcp:read mcp:write")
-    if not token:
-        return False
+    assert token, "Failed to obtain token"
     
     headers = {
         "Authorization": f"Bearer {token}",

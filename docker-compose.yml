@@ -84,8 +84,60 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    env_file:
-      - .env.docker
+    environment:
+      # Explicitly mark as container environment
+      - CONTAINER_ENV=true
+      
+      # Application settings
+      - APP_NAME=${APP_NAME:-demoSecureMCP}
+      - APP_VERSION=${APP_VERSION:-0.1.0}
+      - DEBUG=${DEBUG:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      - WORKERS=${WORKERS:-1}
+      
+      # External URLs (for reference and OAuth issuer)
+      - EXTERNAL_BASE_URL=${EXTERNAL_BASE_URL:-https://localhost}
+      - EXTERNAL_KEYCLOAK_URL=${EXTERNAL_KEYCLOAK_URL:-http://localhost:8080}
+      
+      # Internal URLs (for container communication)
+      - INTERNAL_MCP_URL=http://mcp-server:8000
+      - INTERNAL_KEYCLOAK_URL=http://keycloak:8080
+      - INTERNAL_REDIS_URL=redis://redis:6379/0
+      
+      # Note: PUBLIC_* URLs are optional and only set in production
+      
+      # Keycloak configuration
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-mcp-realm}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-mcp-server}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-mcp-server-secret-change-in-production}
+      
+      # DCR configuration
+      - USE_DCR=${USE_DCR:-false}
+      - DCR_INITIAL_ACCESS_TOKEN=${DCR_INITIAL_ACCESS_TOKEN:-}
+      
+      # OAuth configuration (issuer must match tokens)
+      - OAUTH_ISSUER=${OAUTH_ISSUER:-http://localhost:8080/realms/mcp-realm}
+      - OAUTH_AUDIENCE=${OAUTH_AUDIENCE:-mcp-server}
+      - JWT_ALGORITHMS=${JWT_ALGORITHMS:-RS256,RS384,RS512}
+      - JWT_LEEWAY=${JWT_LEEWAY:-10}
+      
+      # MCP configuration
+      - MCP_RESOURCE_IDENTIFIER=${MCP_RESOURCE_IDENTIFIER:-https://mcp-server.example.com}
+      - MCP_SUPPORTED_SCOPES=${MCP_SUPPORTED_SCOPES:-mcp:read,mcp:write,mcp:infer}
+      
+      # Redis configuration
+      - REDIS_TTL=${REDIS_TTL:-3600}
+      
+      # Security settings
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - REQUIRE_HTTPS=${REQUIRE_HTTPS:-true}
+      - HSTS_MAX_AGE=${HSTS_MAX_AGE:-31536000}
+      
     volumes:
       - ./src:/app/src:ro  # Mount source code for development
       - mcp_logs:/app/logs

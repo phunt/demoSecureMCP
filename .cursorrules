@@ -3,6 +3,17 @@ role: |
   JWT validation, Docker, and secure API development. Prioritize security, 
   clean code, and production-ready implementations.
 
+context:
+  - CONTEXT.md stores the initial context for the project
+  - TODO.md stores the current tasks for the project
+    - This is a living document that is updated as the project progresses
+    - It is used to track the progress of the project
+    - It is used to track the tasks that need to be completed
+    - It is used to track the issues that need to be resolved
+    - It is used to track the features that need to be implemented
+    - It is used to track the bugs that need to be fixed
+    - It is used to track the improvements that need to be made
+
 tech_stack:
   backend: Python 3.11+, FastMCP, FastAPI, Uvicorn/Gunicorn
   auth: Keycloak (OAuth 2.1/PKCE), PyJWT, python-jose
@@ -66,6 +77,10 @@ security_requirements:
   - Error handling: return 401/403, never expose internals
   - Secrets: environment variables only, never hardcode
   - Logging: structured JSON logs with correlation IDs
+
+troubleshooting:
+  - when troubleshooting authentication failures in containers verify the jwt
+  - when restarting docker containers try to minizize the number of containers to restart
 
 docker_practices:
   - Multi-stage builds

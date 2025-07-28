@@ -20,7 +20,7 @@ KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin_password}"
 KEYCLOAK_ISSUER_URL="${KEYCLOAK_ISSUER_URL:-$KEYCLOAK_URL}"
 
 # Script options
-AUTO_UPDATE=false
+AUTO_UPDATE=true
 ENV_FILE=".env.docker"
 SHOW_HELP=false
 
@@ -33,13 +33,13 @@ Set up Dynamic Client Registration for MCP Server by creating an initial access 
 in Keycloak and optionally updating the environment file.
 
 OPTIONS:
-    -a, --auto-update       Automatically update the environment file without prompting
+    -a, --no-auto-update    Disable automatically updating the environment file without prompting
     -e, --env-file FILE     Specify the environment file to update (default: .env.docker)
     -h, --help              Show this help message
     
 EXAMPLES:
     $0                      # Interactive mode (prompts for confirmation)
-    $0 --auto-update        # Automatically update .env.docker
+    $0 --no-auto-update     # Disable utomatically updating .env.docker
     $0 -a -e .env.custom    # Automatically update .env.custom
     
 EOF
@@ -48,8 +48,8 @@ EOF
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -a|--auto-update)
-            AUTO_UPDATE=true
+        -a|--no-auto-update)
+            AUTO_UPDATE=false
             shift
             ;;
         -e|--env-file)

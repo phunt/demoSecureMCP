@@ -1,33 +1,32 @@
-"""Echo MCP tool for demonstrating secure access"""
+"""Echo tool for MCP server
 
-from typing import Dict, Any, Optional
-from datetime import datetime
+A simple tool that echoes back messages with optional transformations.
+"""
 
 from fastmcp import Context
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+import logging
 
-from src.core.logging import get_logger
-
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class EchoRequest(BaseModel):
     """Request model for echo tool"""
-    message: str = Field(..., description="Message to echo back")
-    uppercase: bool = Field(False, description="Convert message to uppercase")
-    timestamp: bool = Field(False, description="Include timestamp in response")
+    message: str
+    uppercase: bool = False
+    timestamp: bool = False
 
 
 class EchoResponse(BaseModel):
     """Response model for echo tool"""
-    original: str = Field(..., description="Original message")
-    echo: str = Field(..., description="Processed echo message")
-    timestamp: Optional[str] = Field(None, description="Timestamp if requested")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    echo: str
+    timestamp: Optional[str] = None
+    length: int
 
 
-async def echo_tool(request: EchoRequest, ctx: Context) -> EchoResponse:
+async def echo_tool(request: EchoRequest, ctx: Optional[Context] = None) -> EchoResponse:
     """
     Echo the provided message with optional transformations.
     
@@ -36,36 +35,33 @@ async def echo_tool(request: EchoRequest, ctx: Context) -> EchoResponse:
     mcp:read scope for access.
     
     Args:
-        request: Echo request with message and options
-        ctx: FastMCP context for logging and progress
+        request: EchoRequest containing message and options
+        ctx: FastMCP context (optional)
         
     Returns:
-        EchoResponse with processed message and metadata
+        EchoResponse with processed message
     """
-    await ctx.info(f"Processing echo request for message: '{request.message}'")
+    # Log the request
+    logger.info(f"Echo tool called with message: {request.message[:50]}...")
     
     # Process the message
-    processed = request.message
+    message = request.message
     if request.uppercase:
-        processed = processed.upper()
-        await ctx.debug("Applied uppercase transformation")
+        message = message.upper()
     
-    # Build response
+    # Create response
     response = EchoResponse(
-        original=request.message,
-        echo=processed,
-        metadata={
-            "length": len(request.message),
-            "words": len(request.message.split()),
-            "uppercase_applied": request.uppercase
-        }
+        echo=message,
+        length=len(request.message)
     )
     
     # Add timestamp if requested
     if request.timestamp:
         response.timestamp = datetime.utcnow().isoformat()
-        response.metadata["timestamp_added"] = True
-        await ctx.debug("Added timestamp to response")
     
-    await ctx.info("Echo request processed successfully")
+    # Log context info if available
+    if ctx:
+        logger.debug(f"Context info: {ctx}")
+    
+    logger.info("Echo tool completed successfully")
     return response 

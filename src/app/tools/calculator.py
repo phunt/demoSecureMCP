@@ -1,145 +1,88 @@
-"""Calculator MCP tool for demonstrating operations requiring write scope"""
+"""Calculator tool for MCP server
 
-from typing import List, Literal, Union, Optional
-from decimal import Decimal, InvalidOperation
-import math
+Performs basic arithmetic calculations.
+"""
 
+from typing import List, Literal, Optional
 from fastmcp import Context
-from pydantic import BaseModel, Field, field_validator
-
-from src.core.logging import get_logger
-
-
-logger = get_logger(__name__)
+from pydantic import BaseModel, Field
+import math
 
 
 class CalculatorRequest(BaseModel):
     """Request model for calculator tool"""
-    operation: Literal["add", "subtract", "multiply", "divide", "power", "sqrt", "factorial"] = Field(
-        ...,
-        description="Mathematical operation to perform"
-    )
-    operands: List[Union[int, float]] = Field(
-        ...,
-        description="Numbers to operate on (most operations require 2, sqrt/factorial require 1)"
-    )
-    precision: Optional[int] = Field(
-        None,
-        description="Decimal precision for the result"
-    )
-    
-    @field_validator('operands')
-    @classmethod
-    def validate_operands(cls, v: List[Union[int, float]], info) -> List[Union[int, float]]:
-        """Validate operand count based on operation"""
-        operation = info.data.get('operation')
-        
-        if operation in ['sqrt', 'factorial']:
-            if len(v) != 1:
-                raise ValueError(f"{operation} requires exactly 1 operand")
-        elif operation in ['add', 'subtract', 'multiply', 'divide', 'power']:
-            if len(v) < 2:
-                raise ValueError(f"{operation} requires at least 2 operands")
-        
-        return v
+    operation: Literal["add", "subtract", "multiply", "divide", "power", "sqrt", "factorial"]
+    operands: List[float] = Field(..., min_items=1, max_items=10)
+    precision: Optional[int] = Field(None, ge=0, le=10)
 
 
 class CalculatorResponse(BaseModel):
     """Response model for calculator tool"""
-    operation: str = Field(..., description="Operation performed")
-    operands: List[Union[int, float]] = Field(..., description="Input operands")
-    result: Union[int, float] = Field(..., description="Calculation result")
-    formula: str = Field(..., description="Mathematical formula used")
-    precision_applied: Optional[int] = Field(None, description="Decimal precision applied")
+    result: float
+    operation: str
+    operands: List[float]
+    precision: Optional[int] = None
 
 
-async def calculator_tool(request: CalculatorRequest, ctx: Context) -> CalculatorResponse:
+async def calculator_tool(request: CalculatorRequest, ctx: Optional[Context] = None) -> CalculatorResponse:
     """
-    Perform mathematical calculations with various operations.
-    
-    This tool demonstrates operations that modify state (requiring write scope).
-    Supports basic arithmetic, power operations, square root, and factorial.
+    Perform mathematical calculations.
     
     Args:
-        request: Calculator request with operation and operands
-        ctx: FastMCP context for logging and progress
+        request: CalculatorRequest with operation and operands
+        ctx: FastMCP context (optional)
         
     Returns:
-        CalculatorResponse with result and calculation details
+        CalculatorResponse with calculation result
     """
-    await ctx.info(f"Performing {request.operation} operation on {len(request.operands)} operands")
+    result = 0.0
     
-    # Convert to Decimal for precision
-    decimals = [Decimal(str(x)) for x in request.operands]
+    # Perform calculation based on operation
+    if request.operation == "add":
+        result = sum(request.operands)
+    elif request.operation == "subtract":
+        if len(request.operands) < 2:
+            raise ValueError("Subtract requires at least 2 operands")
+        result = request.operands[0]
+        for operand in request.operands[1:]:
+            result -= operand
+    elif request.operation == "multiply":
+        result = 1.0
+        for operand in request.operands:
+            result *= operand
+    elif request.operation == "divide":
+        if len(request.operands) < 2:
+            raise ValueError("Divide requires at least 2 operands")
+        result = request.operands[0]
+        for operand in request.operands[1:]:
+            if operand == 0:
+                raise ValueError("Division by zero")
+            result /= operand
+    elif request.operation == "power":
+        if len(request.operands) != 2:
+            raise ValueError("Power requires exactly 2 operands")
+        result = pow(request.operands[0], request.operands[1])
+    elif request.operation == "sqrt":
+        if len(request.operands) != 1:
+            raise ValueError("Square root requires exactly 1 operand")
+        if request.operands[0] < 0:
+            raise ValueError("Cannot calculate square root of negative number")
+        result = math.sqrt(request.operands[0])
+    elif request.operation == "factorial":
+        if len(request.operands) != 1:
+            raise ValueError("Factorial requires exactly 1 operand")
+        operand = request.operands[0]
+        if operand < 0 or operand != int(operand):
+            raise ValueError("Factorial requires a non-negative integer")
+        result = float(math.factorial(int(operand)))
     
-    try:
-        # Perform operation
-        if request.operation == "add":
-            result = sum(decimals)
-            formula = " + ".join(str(x) for x in request.operands)
-            
-        elif request.operation == "subtract":
-            result = decimals[0]
-            for d in decimals[1:]:
-                result -= d
-            formula = " - ".join(str(x) for x in request.operands)
-            
-        elif request.operation == "multiply":
-            result = decimals[0]
-            for d in decimals[1:]:
-                result *= d
-            formula = " × ".join(str(x) for x in request.operands)
-            
-        elif request.operation == "divide":
-            result = decimals[0]
-            for d in decimals[1:]:
-                if d == 0:
-                    await ctx.error("Division by zero attempted")
-                    raise ValueError("Division by zero")
-                result /= d
-            formula = " ÷ ".join(str(x) for x in request.operands)
-            
-        elif request.operation == "power":
-            result = float(request.operands[0]) ** float(request.operands[1])
-            formula = f"{request.operands[0]} ^ {request.operands[1]}"
-            
-        elif request.operation == "sqrt":
-            if request.operands[0] < 0:
-                await ctx.error("Square root of negative number attempted")
-                raise ValueError("Cannot calculate square root of negative number")
-            result = math.sqrt(float(request.operands[0]))
-            formula = f"√{request.operands[0]}"
-            
-        elif request.operation == "factorial":
-            n = int(request.operands[0])
-            if n < 0:
-                await ctx.error("Factorial of negative number attempted")
-                raise ValueError("Cannot calculate factorial of negative number")
-            if n > 170:
-                await ctx.warning("Large factorial may cause overflow")
-            result = math.factorial(n)
-            formula = f"{n}!"
-        
-        # Apply precision if requested
-        if request.precision is not None and isinstance(result, (float, Decimal)):
-            result = round(float(result), request.precision)
-            await ctx.debug(f"Applied precision: {request.precision} decimal places")
-        else:
-            result = float(result) if isinstance(result, Decimal) else result
-        
-        await ctx.info(f"Calculation successful: {formula} = {result}")
-        
-        return CalculatorResponse(
-            operation=request.operation,
-            operands=request.operands,
-            result=result,
-            formula=formula,
-            precision_applied=request.precision
-        )
-        
-    except (ValueError, InvalidOperation, OverflowError) as e:
-        await ctx.error(f"Calculation failed: {str(e)}")
-        raise
-    except Exception as e:
-        await ctx.error(f"Unexpected error in calculation: {str(e)}")
-        raise 
+    # Apply precision if requested
+    if request.precision is not None:
+        result = round(result, request.precision)
+    
+    return CalculatorResponse(
+        result=result,
+        operation=request.operation,
+        operands=request.operands,
+        precision=request.precision
+    ) 

@@ -1,96 +1,104 @@
-"""
-demoSecureMCP
-A production-ready MCP server with OAuth 2.1/PKCE compliance using Keycloak
+"""FastAPI application for secure MCP server
+
+This module implements the main FastAPI application with OAuth 2.0 protection,
+MCP tool endpoints, and proper security configuration.
 """
 
+import logging
 from contextlib import asynccontextmanager
-from typing import Annotated, Dict, Any, List
+from typing import Dict, Any
 
-from fastapi import FastAPI, Depends, Request, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+from fastapi.responses import JSONResponse
 
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.config.validation import validate_and_print
 from src.core.logging import configure_logging
 from src.core.middleware import (
     CorrelationIDMiddleware,
     LoggingMiddleware,
-    SecurityContextMiddleware
+    SecurityContextMiddleware,
 )
 from src.app.auth.jwt_validator import jwt_validator
 from src.app.auth.dependencies import (
     get_current_user,
-    TokenPayload,
     RequireMcpRead,
     RequireMcpWrite,
-    RequireMcpInfer
+    RequireMcpInfer,
+    TokenPayload
 )
-from src.app.auth.dcr_client import DCRClient
+
+# Import MCP tools
 from src.app.tools.echo import echo_tool, EchoRequest
 from src.app.tools.timestamp import timestamp_tool, TimestampRequest
 from src.app.tools.calculator import calculator_tool, CalculatorRequest
 
+# Import DCR client
+from src.app.auth.dcr_client import DCRClient
+
+# Configure logging first
+configure_logging()
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
-    # Startup
-    print("Starting up...")
-    
-    # Configure logging
-    configure_logging()
+    """Application lifespan manager"""
+    # Get settings
+    settings = get_settings()
     
     # Validate configuration
     validate_and_print()
     
-    # Handle Dynamic Client Registration if enabled
-    if settings.use_dcr:
-        print("Using Dynamic Client Registration...")
-        if settings.dcr_initial_access_token:
-            print(f"DCR token found (length: {len(settings.dcr_initial_access_token)})")
-            print(f"DCR token repr last 5 chars: {repr(settings.dcr_initial_access_token[-5:])}")
-        else:
-            print("WARNING: No DCR initial access token found!")
-        
-        dcr_client = DCRClient(settings)
-        
-        try:
-            # Register or load existing registration
-            registered_client = await dcr_client.get_or_register_client(
-                initial_access_token=settings.dcr_initial_access_token
-            )
-            
-            # Update settings with DCR credentials
-            settings.keycloak_client_id = registered_client.client_id
-            settings.keycloak_client_secret = registered_client.client_secret
-            
-            print(f"DCR successful - Client ID: {registered_client.client_id}")
-            
-        except Exception as e:
-            print(f"DCR failed: {e}")
-            raise
-    
     # Initialize JWT validator
     await jwt_validator.initialize()
+    logger.info("JWT validator initialized")
+    
+    # Initialize DCR client if enabled
+    if settings.use_dcr:
+        dcr_client = DCRClient(settings)
+        
+        # Get initial access token and register client
+        initial_token = settings.dcr_initial_access_token
+        if initial_token:
+            try:
+                registered_client = await dcr_client.get_or_register_client(initial_token)
+                logger.info(f"Got client via DCR: {registered_client.client_id}")
+                # Update settings with registered client credentials
+                settings.keycloak_client_id = registered_client.client_id
+                settings.keycloak_client_secret = registered_client.client_secret
+                # Store client credentials for later use
+                app.state.dcr_client_id = registered_client.client_id
+                app.state.dcr_client_secret = registered_client.client_secret
+            except Exception as e:
+                logger.error(f"Failed to register client via DCR: {e}")
+                raise
     
     yield
     
-    # Shutdown
-    print("Shutting down...")
+    # Cleanup
     await jwt_validator.close()
+    logger.info("Application shutdown complete")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="demoSecureMCP",
-    description="A Model Context Protocol server with OAuth 2.1 authentication",
+    title="Secure MCP Server",
+    description="Model Context Protocol server with OAuth 2.0 security",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# Configure CORS from settings
+# Get settings for middleware configuration
+settings = get_settings()
+
+# Add middleware
+app.add_middleware(SecurityContextMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -99,280 +107,228 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware (order matters - reverse order of execution)
-app.add_middleware(LoggingMiddleware)
-app.add_middleware(SecurityContextMiddleware) 
-app.add_middleware(CorrelationIDMiddleware)
 
+# ============================================================================
+# Public Endpoints
+# ============================================================================
 
-@app.get("/", tags=["Health"])
+@app.get("/", tags=["Public"])
 async def root():
-    """Root endpoint"""
-    return {"message": "demoSecureMCP", "status": "operational"}
+    """Root endpoint - returns service information"""
+    return {
+        "service": "Secure MCP Server",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "oauth_metadata": "/.well-known/oauth-protected-resource"
+    }
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Public"])
 async def health_check():
-    """Health check endpoint for Docker/Kubernetes"""
-    return JSONResponse(
-        content={
-            "status": "healthy",
-            "service": "mcp-server",
-            "version": settings.app_version
-        },
-        status_code=200
-    )
+    """Health check endpoint"""
+    return {"status": "healthy"}
 
 
-@app.get("/.well-known/oauth-protected-resource", tags=["Metadata"])
+@app.get("/.well-known/oauth-protected-resource", tags=["Public"])
 async def get_protected_resource_metadata():
     """
-    OAuth 2.0 Protected Resource Metadata endpoint (RFC 9728)
+    OAuth 2.0 Protected Resource Metadata (RFC 9728)
     
-    Provides metadata about this protected resource to help clients
-    understand how to authenticate and authorize requests.
-    
-    This endpoint is publicly accessible (no authentication required).
+    This endpoint provides metadata about the OAuth protection of this resource server.
     """
+    settings = get_settings()
+    
     metadata = {
         "issuer": str(settings.oauth_issuer),
         "resource": settings.mcp_resource_identifier,
-        "token_introspection_endpoint": str(settings.oauth_token_introspection_endpoint) if settings.oauth_token_introspection_endpoint else None,
+        "token_introspection_endpoint": settings.oauth_token_introspection_endpoint,
         "token_types_supported": ["Bearer"],
         "scopes_supported": settings.mcp_supported_scopes,
         "bearer_methods_supported": ["header"],
-        "resource_documentation": "https://github.com/phunt/demoSecureMCP",
+        "resource_documentation": "https://github.com/yourusername/demoSecureMCP",
         "resource_signing_alg_values_supported": settings.jwt_algorithms,
     }
-    
-    # Remove None values for cleaner response
-    metadata = {k: v for k, v in metadata.items() if v is not None}
     
     return JSONResponse(
         content=metadata,
         media_type="application/json",
         headers={
-            "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+            "Cache-Control": "public, max-age=3600",
         }
     )
 
 
-# Protected endpoints for testing
-@app.get("/api/v1/me", tags=["Auth"])
-async def get_current_user_info(
-    current_user: Annotated[TokenPayload, Depends(get_current_user)]
-):
-    """Get current user information from JWT token"""
+# ============================================================================
+# Protected Endpoints
+# ============================================================================
+
+@app.get("/api/v1/user", tags=["Protected"])
+async def get_user_info(current_user: TokenPayload = Depends(get_current_user)):
+    """
+    Get current user information
+    
+    Returns the authenticated user's token payload information.
+    """
     return {
         "sub": current_user.sub,
-        "username": current_user.preferred_username,
+        "preferred_username": current_user.preferred_username,
         "email": current_user.email,
         "email_verified": current_user.email_verified,
-        "scopes": jwt_validator.extract_scopes(current_user)
+        "client_id": current_user.client_id,
+        "scopes": jwt_validator.extract_scopes(current_user),
     }
 
 
-@app.get("/api/v1/protected/read", tags=["Protected"])
-async def protected_read(
-    current_user: Annotated[TokenPayload, RequireMcpRead]
-):
-    """Protected endpoint requiring mcp:read scope"""
+@app.get("/api/v1/dcr-info", tags=["Testing"], include_in_schema=settings.debug)
+async def get_dcr_info():
+    """
+    Get DCR client information (debug only)
+    
+    Returns the dynamically registered client ID for testing purposes.
+    Only available when DEBUG=true and USE_DCR=true.
+    """
+    if not settings.debug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found"
+        )
+    
+    if not settings.use_dcr:
+        return {"dcr_enabled": False}
+    
+    # For testing only - include the actual credentials being used
+    client_id = getattr(app.state, "dcr_client_id", None) or settings.keycloak_client_id
+    client_secret = getattr(app.state, "dcr_client_secret", None) or settings.keycloak_client_secret
+    
     return {
-        "message": "You have read access",
-        "user": current_user.preferred_username,
-        "scope": "mcp:read"
+        "dcr_enabled": True,
+        "client_id": client_id,
+        "client_secret": client_secret,  # Only in debug mode!
+        "has_secret": bool(client_secret),
+        "using_dynamic": bool(getattr(app.state, "dcr_client_id", None))
     }
 
 
-@app.get("/api/v1/protected/write", tags=["Protected"])
-async def protected_write(
-    current_user: Annotated[TokenPayload, RequireMcpWrite]
-):
-    """Protected endpoint requiring mcp:write scope"""
-    return {
-        "message": "You have write access",
-        "user": current_user.preferred_username,
-        "scope": "mcp:write"
-    }
+# ============================================================================
+# MCP Tool Endpoints
+# ============================================================================
 
-
-@app.get("/api/v1/protected/infer", tags=["Protected"])
-async def protected_infer(
-    current_user: Annotated[TokenPayload, RequireMcpInfer]
-):
-    """Protected endpoint requiring mcp:infer scope"""
-    return {
-        "message": "You have inference access",
-        "user": current_user.preferred_username,
-        "scope": "mcp:infer"
-    }
-
-
-# MCP Tool endpoints
+# Tool discovery endpoint
 @app.get("/api/v1/tools", tags=["MCP Tools"])
-async def list_tools(
-    current_user: Annotated[TokenPayload, Depends(get_current_user)]
-):
-    """List available MCP tools and their requirements"""
-    user_scopes = jwt_validator.extract_scopes(current_user)
+async def list_tools(current_user: TokenPayload = Depends(get_current_user)):
+    """
+    List available MCP tools
     
-    tools = [
-        {
-            "name": "echo",
-            "description": "Echo messages with optional transformations",
-            "endpoint": "/api/v1/tools/echo",
-            "required_scope": "mcp:read",
-            "available": "mcp:read" in user_scopes,
-            "parameters": {
-                "message": "string (required)",
-                "uppercase": "boolean (optional, default: false)",
-                "timestamp": "boolean (optional, default: false)"
-            }
-        },
-        {
-            "name": "get_timestamp",
-            "description": "Get current timestamp with formatting options",
-            "endpoint": "/api/v1/tools/timestamp",
-            "required_scope": "mcp:read",
-            "available": "mcp:read" in user_scopes,
-            "parameters": {
-                "format": "string (optional, strftime format)",
-                "timezone": "string (optional, timezone name)",
-                "include_epoch": "boolean (optional, default: false)"
-            }
-        },
-        {
-            "name": "calculate",
-            "description": "Perform mathematical calculations",
-            "endpoint": "/api/v1/tools/calculate",
-            "required_scope": "mcp:write",
-            "available": "mcp:write" in user_scopes,
-            "parameters": {
-                "operation": "string (required: add|subtract|multiply|divide|power|sqrt|factorial)",
-                "operands": "array of numbers (required)",
-                "precision": "integer (optional, decimal places)"
-            }
-        }
-    ]
-    
+    Returns a list of available tools with their required scopes.
+    """
     return {
-        "tools": tools,
-        "user_scopes": user_scopes,
-        "total": len(tools),
-        "available": len([t for t in tools if t["available"]])
+        "tools": [
+            {
+                "name": "echo",
+                "description": "Echo back a message",
+                "endpoint": "/api/v1/tools/echo",
+                "required_scope": "mcp:read",
+                "method": "POST"
+            },
+            {
+                "name": "timestamp", 
+                "description": "Get current timestamp with optional timezone",
+                "endpoint": "/api/v1/tools/timestamp",
+                "required_scope": "mcp:read",
+                "method": "POST"
+            },
+            {
+                "name": "calculator",
+                "description": "Perform basic arithmetic calculations",
+                "endpoint": "/api/v1/tools/calculator",
+                "required_scope": "mcp:write",
+                "method": "POST"
+            }
+        ]
     }
 
 
+# Echo Tool
 @app.post("/api/v1/tools/echo", tags=["MCP Tools"])
 async def echo_endpoint(
     request: EchoRequest,
-    current_user: Annotated[TokenPayload, RequireMcpRead],
-    req: Request
-):
+    current_user: TokenPayload = Depends(RequireMcpRead)
+) -> Dict[str, Any]:
     """
-    Echo tool - returns your message with optional transformations.
+    Echo tool - requires mcp:read scope
     
-    Requires mcp:read scope.
+    Returns the provided message with metadata.
     """
-    # Create a mock context for the tool
-    class MockContext:
-        async def info(self, msg: str): pass
-        async def debug(self, msg: str): pass
-        async def warning(self, msg: str): pass
-        async def error(self, msg: str): pass
-    
-    ctx = MockContext()
-    
-    try:
-        response = await echo_tool(request, ctx)
-        return {"result": response.model_dump()}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Tool execution failed: {str(e)}"
-        )
+    # Call the tool without context since it's optional
+    result = await echo_tool(request)
+    return {
+        "tool": "echo",
+        "result": result,
+        "user": current_user.preferred_username or current_user.sub,
+        "client": current_user.client_id
+    }
 
-
+# Timestamp Tool  
 @app.post("/api/v1/tools/timestamp", tags=["MCP Tools"])
 async def timestamp_endpoint(
     request: TimestampRequest,
-    current_user: Annotated[TokenPayload, RequireMcpRead],
-    req: Request
-):
+    current_user: TokenPayload = Depends(RequireMcpRead)
+) -> Dict[str, Any]:
     """
-    Timestamp tool - get current timestamp with various formatting options.
+    Timestamp tool - requires mcp:read scope
     
-    Requires mcp:read scope.
+    Returns current timestamp with optional timezone conversion.
     """
-    # Create a mock context for the tool
-    class MockContext:
-        async def info(self, msg: str): pass
-        async def debug(self, msg: str): pass
-        async def warning(self, msg: str): pass
-        async def error(self, msg: str): pass
-    
-    ctx = MockContext()
-    
-    try:
-        response = await timestamp_tool(request, ctx)
-        return {"result": response.model_dump()}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Tool execution failed: {str(e)}"
-        )
+    # Call the tool without context since it's optional
+    result = await timestamp_tool(request)
+    return {
+        "tool": "timestamp",
+        "result": result,
+        "user": current_user.preferred_username or current_user.sub,
+        "client": current_user.client_id
+    }
 
 
-@app.post("/api/v1/tools/calculate", tags=["MCP Tools"])
+# Calculator Tool
+@app.post("/api/v1/tools/calculator", tags=["MCP Tools"])
 async def calculate_endpoint(
     request: CalculatorRequest,
-    current_user: Annotated[TokenPayload, RequireMcpWrite],
-    req: Request
-):
+    current_user: TokenPayload = Depends(RequireMcpWrite)
+) -> Dict[str, Any]:
     """
-    Calculator tool - perform mathematical calculations.
+    Calculator tool - requires mcp:write scope
     
-    Requires mcp:write scope.
-    
-    Supported operations:
-    - add: Addition of 2 or more numbers
-    - subtract: Subtraction (left to right)
-    - multiply: Multiplication of 2 or more numbers
-    - divide: Division (left to right)
-    - power: Exponentiation (base^exponent)
-    - sqrt: Square root (single operand)
-    - factorial: Factorial (single operand)
+    Performs arithmetic calculations.
     """
-    # Create a mock context for the tool
-    class MockContext:
-        async def info(self, msg: str): pass
-        async def debug(self, msg: str): pass
-        async def warning(self, msg: str): pass
-        async def error(self, msg: str): pass
-    
-    ctx = MockContext()
-    
-    try:
-        response = await calculator_tool(request, ctx)
-        return {"result": response.model_dump()}
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Tool execution failed: {str(e)}"
-        )
+    # Call the tool without context since it's optional
+    result = await calculator_tool(request)
+    return {
+        "tool": "calculator", 
+        "result": result,
+        "user": current_user.preferred_username or current_user.sub,
+        "client": current_user.client_id
+    }
 
 
-if __name__ == "__main__":
-    # Development server
-    uvicorn.run(
-        "src.app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+# ============================================================================
+# Error Handlers
+# ============================================================================
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request, exc):
+    """Handle validation errors"""
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc):
+    """Handle unexpected errors"""
+    logger.error(f"Unexpected error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"}
     ) 

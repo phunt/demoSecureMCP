@@ -16,6 +16,36 @@ The Model Context Protocol (MCP) enables seamless integration between AI models 
 - **Extensible**: Easy to add new MCP tools while maintaining security
 - **Well Tested**: Comprehensive test suite covering auth flows, token validation, and tool functionality
 
+## 🌟 Key Features
+
+### Security & Authentication
+- **OAuth 2.1 Compliant**: Full OAuth 2.1 implementation with PKCE support via Keycloak
+- **JWT Validation**: Robust token validation with JWKS caching using Redis
+- **Scope-based Authorization**: Fine-grained access control with MCP-specific scopes
+- **Dynamic Client Registration**: Support for RFC 7591 DCR through Keycloak
+
+### Context-Aware URL Management
+- **Automatic Context Detection**: Application automatically detects whether it's running in a container or on the host
+- **Smart URL Selection**: No more hardcoded localhost vs container hostname confusion
+- **Three-tier URL System**:
+  - `EXTERNAL_*` URLs for host machine access
+  - `INTERNAL_*` URLs for container-to-container communication
+  - `PUBLIC_*` URLs for production deployment
+- **Zero Configuration**: Works out of the box in both Docker and local development
+
+### MCP Implementation
+- **FastMCP Framework**: Built on FastMCP for rapid MCP tool development
+- **Demo Tools**: Echo, timestamp, and calculator tools demonstrating different access patterns
+- **Tool Discovery**: Automatic tool listing with required scopes
+- **Protected Resource Metadata**: RFC 9728 compliant metadata endpoint
+
+### Production Features
+- **Health Checks**: Comprehensive health monitoring for all services
+- **Structured Logging**: JSON logging with correlation IDs and security context
+- **SSL/TLS**: Full HTTPS support with nginx reverse proxy
+- **Docker Deployment**: Production-ready Docker Compose configuration
+- **Secrets Management**: Support for Docker secrets and environment-based configuration
+
 ## 🏗️ Architecture Overview
 
 ```mermaid
@@ -68,7 +98,7 @@ git clone https://github.com/phunt/demoSecureMCP.git
 cd demoSecureMCP
 
 # Copy environment template
-cp .env.example .env
+cp docs/ENV_TEMPLATE.md .env
 
 # Edit .env with your settings
 # IMPORTANT: Change all default passwords!
@@ -80,23 +110,21 @@ cp .env.example .env
 # Start all services
 ./scripts/docker_manage.sh start
 
-# Check health status
-./scripts/docker_manage.sh health
-
-# View logs
-./scripts/docker_manage.sh logs
+# Or use docker-compose directly
+docker compose up -d
 ```
 
 ### 3. Configure Authentication
 
-You can use either Dynamic Client Registration (recommended) or static credentials:
+The system supports two authentication modes:
 
-#### Option A: Dynamic Client Registration (Recommended)
+#### Option A: Dynamic Client Registration (DCR)
 
 ```bash
-# Generate and configure DCR
-./scripts/setup_dcr.sh --auto-update
+# Generate initial access token for DCR
+./scripts/setup_dcr.sh
 
+# The script will update your configuration automatically
 # Restart MCP server to apply
 docker compose restart mcp-server
 ```
@@ -104,7 +132,7 @@ docker compose restart mcp-server
 #### Option B: Static Credentials
 
 ```bash
-# Edit .env.docker with static credentials
+# Edit .env with static credentials
 # KEYCLOAK_CLIENT_ID=mcp-server
 # KEYCLOAK_CLIENT_SECRET=your-secret
 ```
@@ -148,17 +176,51 @@ For a complete example of OAuth authentication and tool usage, see the curl-base
 
 ```bash
 cd examples/curl-client
-
-# Run the full demo
 ./full_example.sh
-
-# Or use individual scripts
-./get_token.sh                    # Get access token
-./call_tool.sh echo "Hello!"      # Call tools
-./test.sh                         # Run test suite
 ```
 
 See [examples/curl-client/README.md](examples/curl-client/README.md) for detailed documentation.
+
+## 🔧 Development
+
+### Local Development (Without Docker)
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements-dev.txt
+
+# Start services (Keycloak, Redis, PostgreSQL)
+docker compose up keycloak redis postgres -d
+
+# Run the application
+uvicorn src.app.main:app --reload
+```
+
+### Environment Configuration
+
+The application uses context-aware URL management that automatically selects the correct URLs based on whether it's running in a container or on the host. See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for details.
+
+Key environment files:
+- `.env` or `.env.local` - Local development
+- Docker Compose uses environment variables directly
+- `.env.prod` - Production deployment
+
+### Running Tests
+
+```bash
+# Run all tests
+python -m pytest tests/
+
+# Run specific test suite
+python -m pytest tests/test_token_validation.py -v
+
+# Run with coverage
+python -m pytest --cov=src tests/
+```
 
 ## 📁 Project Structure
 
@@ -167,189 +229,108 @@ demoSecureMCP/
 ├── src/                    # Application source code
 │   ├── app/               # FastAPI application
 │   │   ├── auth/         # Authentication & authorization
-│   │   ├── tools/        # FastMCP tool implementations
+│   │   ├── tools/        # MCP tool implementations
 │   │   └── main.py       # Application entry point
 │   ├── config/           # Configuration management
-│   └── core/             # Core utilities & middleware
-├── examples/              # Example implementations
-│   └── curl-client/      # Shell-based client using curl
-├── tests/                 # Test suites
+│   └── core/             # Core utilities (logging, middleware)
+├── tests/                 # Test suite
 ├── keycloak/             # Keycloak configuration
-├── nginx/                # Nginx reverse proxy config
-├── docs/                 # Additional documentation
-└── docker-compose.yml    # Service orchestration
+├── nginx/                # Nginx configuration
+├── scripts/              # Utility scripts
+├── examples/             # Example clients
+└── docs/                 # Documentation
 ```
 
-## 🔐 Security Model
+## 🔐 Security Features
 
-### Authentication Flow
+### Authentication & Authorization
+- **OAuth 2.1 Compliance**: Implements latest OAuth 2.1 draft specifications
+- **PKCE Required**: Proof Key for Code Exchange mandatory for all flows
+- **JWT Validation**: Complete token validation including signature, expiry, audience
+- **Scope Enforcement**: Fine-grained access control at the endpoint level
 
-```mermaid
-sequenceDiagram
-    participant C as MCP Client
-    participant N as Nginx
-    participant A as API Server
-    participant K as Keycloak
-    participant R as Redis
-    
-    C->>K: Request token (client credentials)
-    K-->>C: Access token (JWT)
-    C->>N: API request + Bearer token
-    N->>A: Forward request
-    A->>R: Check JWKS cache
-    alt Cache miss
-        A->>K: Fetch JWKS
-        A->>R: Cache JWKS
-    end
-    A->>A: Validate JWT signature
-    A->>A: Check claims & scopes
-    A-->>C: API response
-```
+### Network Security
+- **TLS/HTTPS**: All external communication encrypted
+- **Security Headers**: HSTS, X-Frame-Options, CSP configured
+- **CORS**: Configurable Cross-Origin Resource Sharing
 
-### Security Features
-
-- **OAuth 2.1 Compliance**: Latest security standards including PKCE
-- **JWT Validation**: Signature verification with JWKS rotation support
-- **Scope-Based Authorization**: Fine-grained access control
-- **Dynamic Client Registration**: No hardcoded credentials, clients register dynamically
-- **Security Headers**: HSTS, CSP, X-Frame-Options via Nginx
-- **Structured Logging**: Security events with correlation IDs
-- **No Hardcoded Secrets**: Environment-based configuration
-
-## 🛠️ Development
-
-### Local Development Setup
-
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Run tests
-python tests/run_all_tests.py
-```
-
-### Adding New MCP Tools with FastMCP
-
-FastMCP makes it easy to create secure MCP tools. Here's how:
-
-1. Create tool module in `src/app/tools/`
-2. Define request/response models with Pydantic
-3. Implement tool logic using FastMCP's Context
-4. Register endpoint in `src/app/main.py`
-5. Add scope requirements
-6. Update tool discovery endpoint
-7. Add tests
-
-Example using **FastMCP**:
-```python
-# src/app/tools/my_tool.py
-from pydantic import BaseModel
-from fastmcp import Context  # FastMCP provides context for logging
-
-class MyToolRequest(BaseModel):
-    input_data: str
-
-class MyToolResponse(BaseModel):
-    result: str
-
-async def my_tool(request: MyToolRequest, ctx: Context) -> MyToolResponse:
-    # Tool implementation
-    return MyToolResponse(result="processed")
-```
-
-## 📊 Monitoring & Operations
-
-### Health Checks
-
-- **API Health**: `GET /health`
-- **Keycloak Ready**: Via admin API
-- **Service Status**: `./scripts/docker_manage.sh health`
-
-### Logs
-
-- **Structured JSON logs**: Application events
-- **Security audit logs**: Auth attempts, access decisions
-- **Correlation IDs**: Request tracking
-- **Log aggregation ready**: Works with ELK/Splunk
-
-### Metrics
-
-- Request duration
-- Token validation performance
-- Tool usage statistics
-- Error rates by endpoint
-
-## 🚢 Production Deployment
-
-### Using Docker Compose
-
-```bash
-# Deploy with production settings
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# With Docker Swarm secrets
-docker secret create keycloak_client_secret ./secrets/client_secret.txt
-docker stack deploy -c docker-compose.yml -c docker-compose.prod.yml mcp-stack
-```
-
-### Kubernetes
-
-See `k8s/` directory for Kubernetes manifests (if available).
-
-### Environment Variables
-
-Key variables (see `docs/ENVIRONMENT.md` for full list):
-- `KEYCLOAK_URL`: Keycloak base URL
-- `OAUTH_ISSUER`: Expected token issuer
-- `MCP_RESOURCE_IDENTIFIER`: Your API identifier
-- `REDIS_URL`: Redis connection string
-- `LOG_LEVEL`: Logging verbosity
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-python tests/run_all_tests.py
-
-# Run specific test suite
-python tests/test_client_credentials.py
-python tests/test_token_validation.py
-python tests/test_mcp_tools_integration.py
-```
-
-Test coverage includes:
-- OAuth 2.0 client credentials flow
-- JWT token validation scenarios
-- Scope-based authorization
-- MCP tool functionality
-- Error handling
+### Operational Security
+- **No Hardcoded Secrets**: All sensitive data in environment variables
+- **Structured Logging**: Security events logged with context
+- **Health Checks**: Monitoring endpoints for all services
+- **Container Security**: Non-root users, minimal images
 
 ## 📚 Documentation
 
-- [Environment Variables](docs/ENVIRONMENT.md) - Configuration reference
-- [Docker Setup](docs/DOCKER.md) - Container orchestration details
-- [Testing Guide](docs/TESTING.md) - Test suite documentation
-- [API Reference](https://localhost/docs) - OpenAPI documentation
+- [Environment Variables](docs/ENVIRONMENT.md) - Complete configuration reference
+- [Docker Setup](docs/DOCKER.md) - Docker and Docker Compose details
+- [Testing Guide](docs/TESTING.md) - How to run and write tests
+- [DCR Setup](docs/DCR.md) - Dynamic Client Registration configuration
+- [Hostname Management](docs/HOSTNAME_REFACTOR.md) - Context-aware URL system
+
+## 🛠️ MCP Tools
+
+The server includes three demo MCP tools:
+
+1. **Echo Tool** (`mcp:read`)
+   - Echoes back messages with metadata
+   - Demonstrates basic read operations
+
+2. **Timestamp Tool** (`mcp:read`)
+   - Returns current timestamp in various formats
+   - Shows how to handle tool parameters
+
+3. **Calculator Tool** (`mcp:write`)
+   - Performs arithmetic calculations
+   - Requires write scope (demonstration of scope enforcement)
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **Port Conflicts**
+   ```bash
+   # Check if ports are in use
+   lsof -i :80 -i :443 -i :8080
+   ```
+
+2. **Docker Issues**
+   ```bash
+   # Clean restart
+   ./scripts/docker_manage.sh clean
+   ./scripts/docker_manage.sh start
+   ```
+
+3. **Authentication Failures**
+   - Check OAuth issuer URL matches token issuer
+   - Verify client credentials are correct
+   - Ensure scopes are properly requested
+
+4. **SSL Certificate Issues**
+   ```bash
+   # Regenerate self-signed certificates
+   ./scripts/generate_ssl_certs.sh
+   ```
 
 ## 🤝 Contributing
 
+Contributions are welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
+3. Make your changes with tests
+4. Submit a pull request
 
-## 📄 License
+## 📜 License
 
-[Your License Here]
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🙏 Acknowledgments
 
-- **MCP Framework**: [FastMCP](https://github.com/fastmcp/fastmcp) - The Python framework for building MCP servers
-- **Web Framework**: [FastAPI](https://fastapi.tiangolo.com/) - Modern, fast web framework for building APIs
-- **Authentication**: [Keycloak](https://www.keycloak.org/) - Open source identity and access management 
+- [FastMCP](https://github.com/fastmcp/fastmcp) - The MCP framework this project is built on
+- [Keycloak](https://www.keycloak.org/) - Enterprise identity and access management
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+
+## 📮 Contact
+
+For questions or support, please open an issue on GitHub. 

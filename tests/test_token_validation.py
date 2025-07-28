@@ -99,8 +99,7 @@ def test_endpoint_with_token(token: str, expected_status: int = 200) -> bool:
         return success
     except Exception as e:
         print_test(f"Error: {str(e)}", "FAIL")
-        return False
-
+        assert False, "Test failed"
 def create_malformed_token(valid_token: str, modification: str) -> str:
     """Create various types of malformed tokens"""
     parts = valid_token.split(".")
@@ -168,15 +167,13 @@ def test_malformed_tokens():
     
     # Get a valid token first
     valid_token = get_valid_token()
-    if not valid_token:
-        return False
+    assert valid_token, "Failed to obtain valid token"
     
     # Test valid token first
     print_test("\nTesting with valid token")
     if not test_endpoint_with_token(valid_token, 200):
         print_test("Valid token test failed!", "FAIL")
-        return False
-    
+        assert False, "Test failed"
     # Test various malformations
     malformations = [
         ("invalid_signature", "Invalid signature"),
@@ -206,8 +203,7 @@ def test_token_in_different_positions():
     print_test("\n=== Testing Token Placement ===")
     
     valid_token = get_valid_token()
-    if not valid_token:
-        return False
+    assert valid_token, "Failed to obtain valid token"
     
     tests = [
         ("Valid Bearer token", {"Authorization": f"Bearer {valid_token}"}, 200),
@@ -245,8 +241,7 @@ def test_token_claims_validation():
     print_test("\n=== Testing Token Claims Validation ===")
     
     valid_token = get_valid_token()
-    if not valid_token:
-        return False
+    assert valid_token, "Failed to obtain valid token"
     
     # Decode token to inspect claims
     parts = valid_token.split(".")

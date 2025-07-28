@@ -1,114 +1,112 @@
 #!/bin/bash
 
-# Docker Compose Management Script for MCP Server
-# Usage: ./scripts/docker_manage.sh [command]
+# docker_manage.sh - Docker services management script
+# Usage: ./scripts/docker_manage.sh [command] [options]
 
-# Get the directory of this script
+set -euo pipefail
+
+# Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Source common library
 source "${SCRIPT_DIR}/common_lib.sh"
+source "${SCRIPT_DIR}/context_aware_urls.sh"
 
-# Project name
-PROJECT_NAME="demoSecureMCP"
+# Get project root
+PROJECT_ROOT=$(get_project_root)
+cd "${PROJECT_ROOT}"
 
-# Function to show usage
-show_usage() {
-    echo "Usage: $0 [command]"
-    echo ""
-    echo "Commands:"
-    echo "  start       - Start all services"
-    echo "  stop        - Stop all services"
-    echo "  restart     - Restart all services"
-    echo "  status      - Show status of all services"
-    echo "  logs        - Show logs (all services)"
-    echo "  logs [svc]  - Show logs for specific service"
-    echo "  build       - Build/rebuild all images"
-    echo "  clean       - Stop and remove all containers, volumes, and images"
-    echo "  reset       - Clean + remove all data (DESTRUCTIVE)"
-    echo "  ps          - List running containers"
-    echo "  health      - Check health status of all services"
-    echo "  shell [svc] - Open shell in service container"
-    echo ""
-    echo "Services: postgres, keycloak, redis, mcp-server, nginx"
+# Script configuration
+COMPOSE_FILE="docker-compose.yml"
+SERVICES=("postgres" "keycloak" "redis" "mcp-server" "nginx")
+
+# Help text
+show_help() {
+    cat << EOF
+Docker Services Management Script
+
+Usage: ${0##*/} COMMAND [OPTIONS]
+
+Commands:
+    start       Start all services
+    stop        Stop all services  
+    restart     Restart all services
+    down        Stop and remove all containers
+    status      Show service status
+    logs        Show service logs
+    clean       Clean up volumes and images
+    dev         Development mode (with logs)
+    prod        Production mode (with docker-compose.prod.yml)
+    build       Build/rebuild services
+    health      Check service health
+    shell       Enter a service container
+    
+Options:
+    -h, --help  Show this help message
+    -f          Follow logs (with 'logs' command)
+    -v          Verbose output
+    
+Examples:
+    ${0##*/} start              # Start all services
+    ${0##*/} logs -f            # Follow all logs
+    ${0##*/} logs mcp-server -f # Follow specific service logs
+    ${0##*/} shell mcp-server   # Enter MCP server container
+    ${0##*/} clean              # Clean everything
+
+EOF
 }
 
-# Function to wait for services to be healthy
+# Check if Docker is running
+check_docker() {
+    if ! docker info &> /dev/null; then
+        print_error "Docker is not running. Please start Docker first."
+        exit 1
+    fi
+}
+
+# Wait for services to be healthy
 wait_for_healthy() {
     print_info "Waiting for services to be healthy..."
+    local max_attempts=30
+    local attempt=1
     
-    local max_wait=120
-    local elapsed=0
-    
-    while [ $elapsed -lt $max_wait ]; do
-        # Check if all services are healthy
-        local unhealthy=$(docker compose ps --format json | jq -r 'select(.Health != "healthy" and .Health != "" and .Health != null) | .Service' | wc -l | xargs)
+    while [ $attempt -le $max_attempts ]; do
+        local all_healthy=true
         
-        if [ "$unhealthy" -eq "0" ]; then
+        for service in "${SERVICES[@]}"; do
+            if ! docker compose ps --format json | jq -r ".[] | select(.Service == \"$service\") | .Health" | grep -q "healthy\|running"; then
+                all_healthy=false
+                break
+            fi
+        done
+        
+        if [ "$all_healthy" = true ]; then
             print_success "All services are healthy!"
             return 0
         fi
         
         printf "."
         sleep 2
-        elapsed=$((elapsed + 2))
+        attempt=$((attempt + 1))
     done
     
-    echo
-    print_warning "Some services may not be healthy yet. Showing current status:"
+    print_error "Services did not become healthy in time"
     docker compose ps
     return 1
 }
 
-# Function to show health status
-show_health_status() {
-    print_info "Health check status:"
-    echo
+# Main command processing
+main() {
+    check_docker
     
-    # Get all services
-    local services=$(docker compose ps --format json | jq -r '.Service' | sort)
-    
-    for service in $services; do
-        local health=$(docker compose ps --format json | jq -r --arg svc "$service" 'select(.Service == $svc) | .Health' | head -n1)
-        
-        if [ -z "$health" ]; then
-            health="not found"
-        fi
-        
-        case "$health" in
-            "healthy")
-                echo -e "${GREEN}✓${NC} ${service}: ${GREEN}${health}${NC}"
-                ;;
-            "starting")
-                echo -e "${YELLOW}⟳${NC} ${service}: ${YELLOW}${health}${NC}"
-                ;;
-            "unhealthy"|"not found")
-                echo -e "${RED}✗${NC} ${service}: ${RED}${health}${NC}"
-                ;;
-            *)
-                echo -e "${BLUE}-${NC} ${service}: ${BLUE}no health check${NC}"
-                ;;
-        esac
-    done
-}
-
-# Check requirements
-check_required_tools docker
-
-# Main script logic
-case "$1" in
+    case "${1:-}" in
     start)
         print_color $BLUE "Starting all services..."
         
-        # Check if .env.docker exists
-        if [ ! -f .env.docker ]; then
-            print_warning ".env.docker not found. Creating from .env..."
-            if [ -f scripts/create_docker_env.sh ]; then
-                ./scripts/create_docker_env.sh
-            else
-                cp .env .env.docker
-                print_warning "Using .env as .env.docker - may need adjustment for Docker networking"
-            fi
+        # Load environment if .env file exists
+        if [ -f .env ]; then
+            print_info "Loading environment from .env file..."
+            set -a
+            source .env
+            set +a
         fi
         
         docker compose up -d
@@ -120,6 +118,9 @@ case "$1" in
         echo "  - Keycloak: http://localhost:8080/"
         echo "  - Health check: https://localhost/health"
         echo "  - OpenAPI docs: https://localhost/docs"
+        
+        # Show context information
+        print_context_info
         ;;
         
     stop)
@@ -132,88 +133,106 @@ case "$1" in
         print_color $BLUE "Restarting all services..."
         docker compose restart
         wait_for_healthy
+        print_success "Services restarted"
+        ;;
+        
+    down)
+        print_color $BLUE "Stopping and removing containers..."
+        docker compose down
+        print_success "Containers removed"
         ;;
         
     status)
-        print_color $BLUE "Service status:"
-        docker compose ps --format "table {{.Service}}\t{{.Status}}\t{{.Health}}\t{{.Ports}}"
-        ;;
-        
-    logs)
-        if [ -z "$2" ]; then
-            docker compose logs -f --tail=100
-        else
-            docker compose logs -f --tail=100 "$2"
-        fi
-        ;;
-        
-    build)
-        print_color $BLUE "Building all images..."
-        docker compose build --no-cache
-        print_success "Build complete"
-        ;;
-        
-    clean)
-        print_warning "This will stop and remove all containers, networks, and volumes!"
-        read -p "Are you sure? (y/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_color $BLUE "Cleaning up..."
-            docker compose down -v --remove-orphans
-            docker compose rm -f
-            print_success "Cleanup complete"
-        else
-            print_info "Cleanup cancelled"
-        fi
-        ;;
-        
-    reset)
-        print_warning "This will DESTROY all data including databases!"
-        read -p "Are you absolutely sure? (type 'yes' to confirm) " -r
-        if [ "$REPLY" = "yes" ]; then
-            print_color $RED "Resetting everything..."
-            docker compose down -v --remove-orphans --rmi all
-            rm -f .env.docker
-            print_success "Reset complete. Run './scripts/docker_manage.sh start' to begin fresh."
-        else
-            print_info "Reset cancelled"
-        fi
-        ;;
-        
-    ps)
+        print_color $BLUE "Service Status:"
         docker compose ps
         ;;
         
+    logs)
+        shift
+        if [[ "${1:-}" == "-f" ]] || [[ "${2:-}" == "-f" ]]; then
+            docker compose logs -f ${1:-} | grep -v "^$"
+        else
+            docker compose logs ${1:-} | tail -100
+        fi
+        ;;
+        
+    clean)
+        print_warning "This will remove all containers, volumes, and images!"
+        read -p "Are you sure? (y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Cleaning up..."
+            docker compose down -v --remove-orphans
+            docker image prune -af --filter "label=com.docker.compose.project=${PWD##*/}"
+            print_success "Cleanup complete"
+        fi
+        ;;
+        
+    dev)
+        print_color $BLUE "Starting in development mode..."
+        
+        # Load environment if .env file exists
+        if [ -f .env ]; then
+            set -a
+            source .env
+            set +a
+        fi
+        
+        docker compose up
+        ;;
+        
+    prod)
+        print_color $BLUE "Starting in production mode..."
+        
+        # Check for production environment file
+        if [ -f .env.prod ]; then
+            print_info "Loading production environment..."
+            set -a
+            source .env.prod
+            set +a
+        fi
+        
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+        wait_for_healthy
+        print_success "Production services started"
+        ;;
+        
+    build)
+        print_color $BLUE "Building services..."
+        docker compose build ${2:-}
+        print_success "Build complete"
+        ;;
+        
     health)
-        show_health_status
+        print_color $BLUE "Health Check Results:"
+        for service in "${SERVICES[@]}"; do
+            echo -n "  $service: "
+            health=$(docker compose ps --format json | jq -r ".[] | select(.Service == \"$service\") | .Health")
+            case "$health" in
+                "healthy") print_color $GREEN "HEALTHY" ;;
+                "running") print_color $YELLOW "RUNNING (no health check)" ;;
+                *) print_color $RED "UNHEALTHY" ;;
+            esac
+        done
         ;;
         
     shell)
-        if [ -z "$2" ]; then
-            print_error "Please specify a service name"
-            echo "Available services: postgres, keycloak, redis, mcp-server, nginx"
-            exit 1
-        fi
+        service="${2:-mcp-server}"
+        print_info "Entering $service container..."
+        docker compose exec $service /bin/sh
+        ;;
         
-        print_info "Opening shell in $2 container..."
-        case "$2" in
-            postgres)
-                docker compose exec postgres psql -U keycloak
-                ;;
-            redis)
-                docker compose exec redis redis-cli
-                ;;
-            *)
-                docker compose exec "$2" /bin/sh
-                ;;
-        esac
+    -h|--help|help)
+        show_help
         ;;
         
     *)
-        if [ -n "$1" ]; then
-            print_error "Unknown command: $1"
-        fi
-        show_usage
+        print_error "Unknown command: ${1:-}"
+        show_help
         exit 1
         ;;
-esac 
+    esac
+}
+
+# Run main function
+main "$@" 

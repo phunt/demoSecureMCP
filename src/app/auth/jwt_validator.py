@@ -1,26 +1,25 @@
-"""JWT validation module with JWKS caching"""
+"""JWT validation module for OAuth 2.0 token verification
 
-import json
+This module implements JWT token validation with JWKS caching using Redis.
+It supports dynamic key rotation and validates tokens according to OAuth 2.1 standards.
+"""
+
+from typing import Dict, Any, Optional, List
 import time
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+import json
+from functools import lru_cache
 
-import httpx
 import jwt
-from jwt import PyJWKClient
-from jwt.exceptions import (
-    ExpiredSignatureError,
-    InvalidTokenError,
-    InvalidSignatureError,
-    InvalidIssuerError,
-    InvalidAudienceError,
-    InvalidKeyError,
-    MissingRequiredClaimError
-)
+from jwt import PyJWKClient, InvalidTokenError, InvalidKeyError
+import httpx
 import redis.asyncio as redis
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.core.logging import security_logger, get_logger
 
 logger = get_logger(__name__)
@@ -29,14 +28,18 @@ logger = get_logger(__name__)
 class TokenPayload(BaseModel):
     """Validated JWT token payload"""
     sub: str  # Subject (user ID)
-    iss: str  # Issuer
-    aud: str | List[str]  # Audience
     exp: int  # Expiration time
     iat: int  # Issued at
+    jti: Optional[str] = None  # JWT ID
+    iss: str  # Issuer
+    aud: Optional[str] = None  # Audience
+    azp: Optional[str] = None  # Authorized party (client ID)
+    typ: Optional[str] = None  # Token type
     scope: Optional[str] = None  # OAuth scopes
-    preferred_username: Optional[str] = None
     email: Optional[str] = None
     email_verified: Optional[bool] = None
+    preferred_username: Optional[str] = None
+    client_id: Optional[str] = None  # Client ID from azp or client_id claim
     realm_access: Optional[Dict[str, List[str]]] = None
     resource_access: Optional[Dict[str, Any]] = None
 
@@ -45,7 +48,7 @@ class JWTValidator:
     """JWT validator with JWKS caching support"""
     
     def __init__(self):
-        self.settings = settings
+        self.settings = get_settings()
         self.redis_client: Optional[redis.Redis] = None
         self.jwks_client: Optional[PyJWKClient] = None
         self._jwks_cache_key = f"jwks:{self.settings.keycloak_realm}"
@@ -59,76 +62,21 @@ class JWTValidator:
                 encoding="utf-8",
                 decode_responses=True
             )
-            await self.redis_client.ping()
             logger.info("Redis connection established for JWKS caching")
         except Exception as e:
-            logger.warning(f"Redis connection failed: {e}. Using in-memory cache.")
+            logger.warning(f"Redis connection failed: {e}. Continuing without cache.")
             self.redis_client = None
-        
-        # Initialize JWKS client
-        await self._setup_jwks_client()
-    
+            
+        # Initialize JWKS client with computed URI
+        jwks_uri = self.settings.oauth_jwks_uri
+        self.jwks_client = PyJWKClient(jwks_uri, cache_jwk_set=True, lifespan=3600)
+        logger.info(f"JWKS client initialized with URI: {jwks_uri}")
+            
     async def close(self):
         """Close Redis connection"""
         if self.redis_client:
             await self.redis_client.close()
-    
-    async def _setup_jwks_client(self):
-        """Setup JWKS client with discovered configuration"""
-        # Try to get OpenID configuration from cache
-        openid_config = await self._get_cached_openid_config()
-        
-        if not openid_config:
-            # Fetch from Keycloak
-            async with httpx.AsyncClient() as client:
-                response = await client.get(str(self.settings.openid_config_url))
-                response.raise_for_status()
-                openid_config = response.json()
-                
-                # Cache the configuration
-                await self._cache_openid_config(openid_config)
-        
-        # Create JWKS client
-        # Always use the configured JWKS URI to handle Docker networking properly
-        jwks_uri = str(self.settings.oauth_jwks_uri)
-        self.jwks_client = PyJWKClient(jwks_uri)
-    
-    async def _get_cached_openid_config(self) -> Optional[Dict]:
-        """Get cached OpenID configuration"""
-        if not self.redis_client:
-            return None
             
-        try:
-            cached = await self.redis_client.get(self._openid_config_cache_key)
-            if cached:
-                return json.loads(cached)
-        except Exception:
-            pass
-        
-        return None
-    
-    async def _cache_openid_config(self, config: Dict):
-        """Cache OpenID configuration"""
-        if not self.redis_client:
-            return
-            
-        try:
-            await self.redis_client.setex(
-                self._openid_config_cache_key,
-                self.settings.redis_ttl,
-                json.dumps(config)
-            )
-        except Exception:
-            pass
-    
-    async def _get_signing_key(self, token: str):
-        """Get signing key for token verification"""
-        if not self.jwks_client:
-            raise InvalidKeyError("JWKS client not initialized")
-        
-        # PyJWKClient handles caching internally
-        return self.jwks_client.get_signing_key_from_jwt(token)
-    
     async def validate_token(self, token: str) -> TokenPayload:
         """
         Validate JWT token and return payload
@@ -140,37 +88,26 @@ class JWTValidator:
             TokenPayload: Validated token payload
             
         Raises:
-            InvalidTokenError: If token validation fails
+            HTTPException: If token is invalid
         """
         try:
-            # Get signing key
-            signing_key = await self._get_signing_key(token)
+            # Use PyJWKClient to get the signing key
+            if not self.jwks_client:
+                raise InvalidTokenError("JWKS client not initialized")
             
-            # First decode without audience validation to check what's in the token
-            unverified_payload = jwt.decode(
-                token,
-                options={"verify_signature": False}
-            )
+            signing_key = self.jwks_client.get_signing_key_from_jwt(token)
             
-            # Check if token has 'aud' or 'azp' claim for audience validation
-            audience = None
-            if 'aud' in unverified_payload:
-                audience = self.settings.oauth_audience
-            elif 'azp' in unverified_payload and unverified_payload['azp'] == self.settings.oauth_audience:
-                # Keycloak uses 'azp' for client credentials flow
-                audience = None  # Skip audience validation, we'll check azp manually
+            # Decode without verification to check audience claim
+            unverified_payload = jwt.decode(token, options={"verify_signature": False})
             
-            # Decode and validate token
-            decode_options = {
-                "verify_signature": True,
-                "verify_exp": True,
-                "verify_nbf": True,
-                "verify_iat": True,
-                "verify_aud": audience is not None,
-                "verify_iss": True,
-                "require": ["exp", "iat", "iss", "sub"]
-            }
+            # Determine the audience to validate
+            # Keycloak uses 'azp' for client credentials flow
+            audience = self.settings.oauth_audience
+            if 'aud' not in unverified_payload and 'azp' in unverified_payload:
+                # For client credentials flow, validate against azp
+                audience = None  # Skip aud validation, we'll check azp separately
             
+            # Validate the token
             payload = jwt.decode(
                 token,
                 signing_key.key,
@@ -178,88 +115,96 @@ class JWTValidator:
                 issuer=str(self.settings.oauth_issuer),
                 audience=audience,
                 leeway=self.settings.jwt_leeway,
-                options=decode_options
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_nbf": True,
+                    "verify_iat": True,
+                    "verify_aud": audience is not None,  # Only verify if we have an audience
+                    "verify_iss": True,
+                }
             )
             
-            # If using azp, verify it matches our expected audience
-            if 'azp' in payload and 'aud' not in payload:
+            # For client credentials, validate azp
+            if 'azp' in payload and audience is None:
                 if payload['azp'] != self.settings.oauth_audience:
                     raise InvalidTokenError(f"Invalid authorized party (azp): expected {self.settings.oauth_audience}, got {payload['azp']}")
             
-            # Create validated payload (handle aud as optional)
-            if 'aud' not in payload and 'azp' in payload:
-                payload['aud'] = payload['azp']
+            # Extract client_id (prefer azp over client_id claim)
+            client_id = payload.get('azp') or payload.get('client_id')
             
-            token_payload = TokenPayload(**payload)
+            # Create TokenPayload
+            token_payload = TokenPayload(
+                sub=payload["sub"],
+                exp=payload["exp"],
+                iat=payload["iat"],
+                jti=payload.get("jti"),
+                iss=payload["iss"],
+                aud=payload.get("aud"),
+                azp=payload.get("azp"),
+                typ=payload.get("typ"),
+                scope=payload.get("scope", ""),
+                email=payload.get("email"),
+                email_verified=payload.get("email_verified"),
+                preferred_username=payload.get("preferred_username"),
+                client_id=client_id,
+                realm_access=payload.get("realm_access"),
+                resource_access=payload.get("resource_access")
+            )
             
             # Log successful validation
-            security_logger.log_token_validation(
+            security_logger.log_auth_attempt(
                 success=True,
-                extra={'sub': token_payload.sub}
+                user_id=token_payload.sub,
+                client_id=client_id
             )
             
             return token_payload
             
-        except ExpiredSignatureError:
-            error = "Token has expired"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
-        except InvalidSignatureError:
-            error = "Invalid token signature"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
-        except InvalidIssuerError:
-            error = "Invalid token issuer"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
-        except InvalidAudienceError:
-            error = "Invalid token audience"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
-        except MissingRequiredClaimError as e:
-            error = f"Missing required claim: {e}"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
+        except jwt.ExpiredSignatureError:
+            security_logger.log_auth_attempt(
+                success=False,
+                reason="Token expired"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        except jwt.InvalidTokenError as e:
+            security_logger.log_auth_attempt(
+                success=False,
+                reason=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
         except Exception as e:
-            error = f"Token validation failed: {str(e)}"
-            security_logger.log_token_validation(success=False, error=error)
-            raise InvalidTokenError(error)
-    
-    def extract_scopes(self, payload: TokenPayload) -> List[str]:
+            logger.error(f"Unexpected error during token validation: {str(e)}")
+            security_logger.log_auth_attempt(
+                success=False,
+                reason=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token validation failed",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+            
+    def extract_scopes(self, token_payload: TokenPayload) -> List[str]:
         """Extract scopes from token payload"""
-        scopes = []
-        
-        # OAuth2 scopes from 'scope' claim
-        if payload.scope:
-            scopes.extend(payload.scope.split())
-        
+        # OAuth scopes in the 'scope' claim
+        if token_payload.scope:
+            return token_payload.scope.split()
+            
         # Keycloak realm roles
-        if payload.realm_access and payload.realm_access.get("roles"):
-            scopes.extend([f"role:{role}" for role in payload.realm_access["roles"]])
-        
-        # Keycloak resource roles
-        if payload.resource_access:
-            for resource, access in payload.resource_access.items():
-                if isinstance(access, dict) and access.get("roles"):
-                    scopes.extend([f"{resource}:{role}" for role in access["roles"]])
-        
-        return scopes
-    
-    def has_scope(self, payload: TokenPayload, required_scope: str) -> bool:
-        """Check if token has required scope"""
-        scopes = self.extract_scopes(payload)
-        return required_scope in scopes
-    
-    def has_any_scope(self, payload: TokenPayload, required_scopes: List[str]) -> bool:
-        """Check if token has any of the required scopes"""
-        scopes = self.extract_scopes(payload)
-        return any(scope in scopes for scope in required_scopes)
-    
-    def has_all_scopes(self, payload: TokenPayload, required_scopes: List[str]) -> bool:
-        """Check if token has all required scopes"""
-        scopes = self.extract_scopes(payload)
-        return all(scope in scopes for scope in required_scopes)
+        if token_payload.realm_access and "roles" in token_payload.realm_access:
+            return token_payload.realm_access["roles"]
+            
+        return []
 
 
-# Global validator instance
+# Create a singleton instance
 jwt_validator = JWTValidator() 

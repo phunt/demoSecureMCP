@@ -59,8 +59,12 @@ class DCRClient:
     async def discover_registration_endpoint(self) -> str:
         """Discover the DCR endpoint from OAuth metadata"""
         try:
-            # Get OAuth metadata
-            metadata_url = f"{self.settings.oauth_issuer}/.well-known/openid-configuration"
+            # Get OAuth metadata - use internal URL when in container
+            if self.settings.container_env:
+                base_url = str(self.settings.internal_keycloak_url)
+                metadata_url = f"{base_url}/realms/{self.settings.keycloak_realm}/.well-known/openid-configuration"
+            else:
+                metadata_url = f"{self.settings.oauth_issuer}/.well-known/openid-configuration"
             
             async with httpx.AsyncClient() as client:
                 response = await client.get(metadata_url)

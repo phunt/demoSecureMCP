@@ -9,7 +9,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from src.core.logging import log_with_context
+from src.core.logging import get_logger
 
 
 class CorrelationIDMiddleware(BaseHTTPMiddleware):
@@ -48,7 +48,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
     def __init__(self, app: ASGIApp):
         super().__init__(app)
-        self.logger = logging.getLogger("mcp_server.access")
+        self.logger = get_logger("mcp_server.access")
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Log request and response details"""
@@ -69,18 +69,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         client_ip = self._get_client_ip(request)
         
         # Log request
-        log_with_context(
-            self.logger,
-            logging.INFO,
-            f"Request started: {method} {path}",
-            correlation_id=correlation_id,
-            request_id=request_id,
-            method=method,
-            path=path,
-            query=query,
-            client_ip=client_ip,
-            user_agent=request.headers.get("user-agent"),
-        )
+        extra = {
+            "correlation_id": correlation_id,
+            "request_id": request_id,
+            "method": method,
+            "path": path,
+            "query": query,
+            "client_ip": client_ip,
+            "user_agent": request.headers.get("user-agent"),
+        }
+        self.logger.info(f"Request started: {method} {path}", extra=extra)
         
         # Process request
         try:
@@ -91,17 +89,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration_ms = int((time.time() - start_time) * 1000)
             
             # Log response
-            log_with_context(
-                self.logger,
-                logging.INFO,
+            extra.update({
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+            })
+            self.logger.info(
                 f"Request completed: {method} {path} -> {status_code}",
-                correlation_id=correlation_id,
-                request_id=request_id,
-                method=method,
-                path=path,
-                status_code=status_code,
-                duration_ms=duration_ms,
-                client_ip=client_ip,
+                extra=extra
             )
             
             # Add timing header
@@ -114,18 +108,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration_ms = int((time.time() - start_time) * 1000)
             
             # Log error
-            log_with_context(
-                self.logger,
-                logging.ERROR,
+            extra.update({
+                "duration_ms": duration_ms,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            })
+            self.logger.error(
                 f"Request failed: {method} {path} -> {type(e).__name__}",
-                correlation_id=correlation_id,
-                request_id=request_id,
-                method=method,
-                path=path,
-                duration_ms=duration_ms,
-                client_ip=client_ip,
-                error=str(e),
-                error_type=type(e).__name__,
+                extra=extra,
+                exc_info=True
             )
             raise
     

@@ -183,17 +183,30 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
   - ✅ Include troubleshooting section for common issues
   - ✅ Add examples of handling different OAuth error scenarios
 
+### 15. Hostname Management Refactor
+- **Status:** ✅ Completed
+- **Description:** Refactor hostname management for clarity and simplicity
+- **Actions:**
+  - ✅ Introduce clear URL categorization (EXTERNAL_, INTERNAL_, PUBLIC_)
+  - ✅ Implement context-aware URL selection in Python and Shell scripts
+  - ✅ Create comprehensive documentation (docs/HOSTNAME_REFACTOR.md)
+  - ✅ Update all environment files and templates
+  - ✅ Fix OAuth issuer vs internal URL issues for JWT validation
+  - ✅ Update docker-compose configurations
+  - ✅ Test all services with new hostname management
+  - ✅ Verify tests pass with DCR turned off
+
 ## Key Security Requirements Checklist
 
-- [ ] OAuth 2.1 compliant token validation
-- [ ] PKCE support (via Keycloak client config)
-- [ ] RFC 9728 Protected Resource Metadata endpoint
-- [ ] HTTPS/TLS enforcement
-- [ ] Proper error handling without information leakage
-- [ ] Structured security event logging
-- [ ] No hardcoded secrets
-- [ ] Container security best practices
-- [ ] JWKS caching and rotation support
+- [x] OAuth 2.1 compliant token validation
+- [x] PKCE support (via Keycloak client config)
+- [x] RFC 9728 Protected Resource Metadata endpoint
+- [x] HTTPS/TLS enforcement
+- [x] Proper error handling without information leakage
+- [x] Structured security event logging
+- [x] No hardcoded secrets
+- [x] Container security best practices
+- [x] JWKS caching and rotation support
 
 ## Implementation References
 
@@ -205,10 +218,10 @@ Build a production-ready Python/FastAPI MCP server with OAuth 2.1/PKCE complianc
 
 ## Success Criteria
 
-1. MCP server validates JWT tokens from Keycloak
-2. Protected Resource Metadata endpoint is accessible
-3. Demo tool requires valid token with appropriate scope
-4. All services run via `docker-compose up`
-5. HTTPS is enforced with proper certificates
-6. Logs capture security events in structured format
-7. No secrets in code or Docker images 
+1. ✅ MCP server validates JWT tokens from Keycloak
+2. ✅ Protected Resource Metadata endpoint is accessible
+3. ✅ Demo tool requires valid token with appropriate scope
+4. ✅ All services run via `docker-compose up`
+5. ✅ HTTPS is enforced with proper certificates
+6. ✅ Logs capture security events in structured format
+7. ✅ No secrets in code or Docker images 

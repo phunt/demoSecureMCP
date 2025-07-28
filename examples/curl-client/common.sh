@@ -1,188 +1,247 @@
 #!/bin/bash
 
-# common.sh - Common functions for curl client scripts
-# Source this file in client scripts: source "$(dirname "$0")/common.sh"
+# common.sh - Common functions and environment setup for MCP API examples
+# This file provides shared functionality for the curl client examples
 
-# Get the directory of this script
-CLIENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Enable strict error handling
+set -euo pipefail
 
-# Source main common library
-source "${CLIENT_DIR}/../../scripts/common_lib.sh"
+# ==========================================================================
+# Environment Setup - Using External URLs (client always runs from host)
+# ==========================================================================
 
-# Client-specific configuration defaults
-set_default_env "MCP_SERVER_URL" "https://localhost"
-set_default_env "KEYCLOAK_URL" "http://localhost:8080"
+# Default environment variables - clients always use external URLs
+set_default_env() {
+    local var_name=$1
+    local default_value=$2
+    if [ -z "${!var_name:-}" ]; then
+        export "${var_name}=${default_value}"
+    fi
+}
+
+# Set defaults for external access
+set_default_env "MCP_SERVER_URL" "${EXTERNAL_BASE_URL:-https://localhost}"
+set_default_env "KEYCLOAK_URL" "${EXTERNAL_KEYCLOAK_URL:-http://localhost:8080}"
 set_default_env "KEYCLOAK_REALM" "mcp-realm"
 set_default_env "CLIENT_ID" "mcp-server"
 set_default_env "CLIENT_SECRET" "mcp-server-secret-change-in-production"
-set_default_env "TOKEN_FILE" "/tmp/mcp_access_token"
 
-# Client-specific functions
+# Allow insecure connections for development (self-signed certificates)
+set_default_env "CURL_INSECURE" "true"
 
-# Check if access token is available
-check_access_token() {
-    local token="${ACCESS_TOKEN:-}"
-    local token_file="${1:-$TOKEN_FILE}"
-    
-    # Try environment variable first
-    if [ -n "$token" ]; then
-        echo "$token"
-        return 0
+# ==========================================================================
+# Color Output Functions
+# ==========================================================================
+
+# Color codes for output
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly NC='\033[0m' # No Color
+
+# Print functions
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_debug() {
+    if [ "${DEBUG:-false}" = "true" ]; then
+        echo -e "${CYAN}[DEBUG]${NC} $1" >&2
     fi
+}
+
+# ==========================================================================
+# Utility Functions
+# ==========================================================================
+
+# Check if a command exists
+command_exists() {
+    command -v "$1" &> /dev/null
+}
+
+# Die with error message
+die() {
+    print_error "$1"
+    exit "${2:-1}"
+}
+
+# Validate required commands
+check_requirements() {
+    local missing_commands=()
     
-    # Try token file
-    if [ -f "$token_file" ] && [ -r "$token_file" ]; then
-        token=$(cat "$token_file")
-        if [ -n "$token" ]; then
-            echo "$token"
-            return 0
+    for cmd in curl jq; do
+        if ! command_exists "$cmd"; then
+            missing_commands+=("$cmd")
         fi
-    fi
+    done
     
-    return 1
+    if [ ${#missing_commands[@]} -gt 0 ]; then
+        die "Missing required commands: ${missing_commands[*]}"
+    fi
 }
 
-# Validate JWT token format
-validate_jwt_format() {
-    local token=$1
+# ==========================================================================
+# Authentication Functions
+# ==========================================================================
+
+# Get access token using client credentials flow
+get_access_token() {
+    local token_endpoint="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token"
+    local curl_opts=()
     
-    # JWT should have three parts separated by dots
-    local parts=$(echo "$token" | tr '.' '\n' | wc -l)
-    if [ "$parts" -ne 3 ]; then
+    if [ "${CURL_INSECURE}" = "true" ]; then
+        curl_opts+=(-k)
+    fi
+    
+    print_debug "Token endpoint: $token_endpoint"
+    print_debug "Client ID: $CLIENT_ID"
+    
+    local response
+    response=$(curl -s "${curl_opts[@]}" -X POST "$token_endpoint" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=client_credentials" \
+        -d "client_id=$CLIENT_ID" \
+        -d "client_secret=$CLIENT_SECRET" \
+        -d "scope=mcp:read mcp:write")
+    
+    local access_token
+    access_token=$(echo "$response" | jq -r '.access_token // empty')
+    
+    if [ -z "$access_token" ]; then
+        print_error "Failed to get access token"
+        print_debug "Response: $response"
         return 1
     fi
     
-    # Each part should be base64url encoded
-    if ! echo "$token" | grep -E '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$' > /dev/null; then
-        return 1
-    fi
-    
-    return 0
+    echo "$access_token"
 }
 
-# Parse JWT payload (base64url decode)
-parse_jwt_payload() {
-    local token=$1
-    local payload=$(echo "$token" | cut -d. -f2)
-    
-    # Add padding if needed
-    local len=$((${#payload} % 4))
-    if [ $len -eq 2 ]; then
-        payload="${payload}=="
-    elif [ $len -eq 3 ]; then
-        payload="${payload}="
-    fi
-    
-    # Decode (handle both Linux and macOS base64)
-    if command_exists base64; then
-        echo "$payload" | base64 -d 2>/dev/null || echo "$payload" | base64 -D 2>/dev/null
-    fi
-}
+# ==========================================================================
+# API Call Functions
+# ==========================================================================
 
-# Check if token is expired
-is_token_expired() {
-    local token=$1
-    
-    if ! validate_jwt_format "$token"; then
-        return 0  # Invalid token is considered expired
-    fi
-    
-    local payload=$(parse_jwt_payload "$token")
-    if [ -z "$payload" ]; then
-        return 0  # Can't parse, consider expired
-    fi
-    
-    local exp=$(echo "$payload" | jq -r '.exp' 2>/dev/null)
-    if [ -z "$exp" ] || [ "$exp" = "null" ]; then
-        return 0  # No expiry, consider expired
-    fi
-    
-    local now=$(date +%s)
-    if [ "$now" -ge "$exp" ]; then
-        return 0  # Token is expired
-    fi
-    
-    return 1  # Token is valid
-}
-
-# Make authenticated request
-make_authenticated_request() {
+# Make an authenticated API call
+call_api() {
     local method=$1
-    local url=$2
-    local data=$3
-    local token=$4
+    local endpoint=$2
+    local data=${3:-}
+    local token=${4:-$(get_access_token)}
     
-    local curl_opts=(-s -k -H "Authorization: Bearer ${token}" -H "Content-Type: application/json")
+    local url="${MCP_SERVER_URL}${endpoint}"
+    local curl_opts=(-s -X "$method" -H "Authorization: Bearer $token")
     
-    case "$method" in
-        GET)
-            curl "${curl_opts[@]}" -X GET "$url"
-            ;;
-        POST)
-            if [ -n "$data" ]; then
-                curl "${curl_opts[@]}" -X POST -d "$data" "$url"
-            else
-                curl "${curl_opts[@]}" -X POST "$url"
-            fi
-            ;;
-        *)
-            print_error "Unsupported HTTP method: $method"
-            return 1
-            ;;
-    esac
+    if [ "${CURL_INSECURE}" = "true" ]; then
+        curl_opts+=(-k)
+    fi
+    
+    if [ -n "$data" ]; then
+        curl_opts+=(-H "Content-Type: application/json" -d "$data")
+    fi
+    
+    print_debug "API Call: $method $url"
+    
+    local response
+    local http_code
+    
+    # Make the request and capture both response and status code
+    response=$(curl "${curl_opts[@]}" -w "\n%{http_code}" "$url")
+    http_code=$(echo "$response" | tail -n1)
+    response=$(echo "$response" | head -n-1)
+    
+    print_debug "HTTP Code: $http_code"
+    print_debug "Response: $response"
+    
+    # Check for success (2xx status codes)
+    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+        echo "$response"
+        return 0
+    else
+        print_error "API call failed with status: $http_code"
+        print_error "Response: $response"
+        return 1
+    fi
 }
 
-# Check service availability
+# ==========================================================================
+# Service Health Checks
+# ==========================================================================
+
+# Check if a service is available
 check_service_availability() {
     local service_name=$1
     local url=$2
     local expected_status=${3:-200}
     
-    print_debug "Checking $service_name availability at $url"
+    local curl_opts=(-s -o /dev/null -w "%{http_code}")
     
-    local status=$(curl -s -k -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+    if [ "${CURL_INSECURE}" = "true" ]; then
+        curl_opts+=(-k)
+    fi
     
-    if [ "$status" = "$expected_status" ]; then
-        print_debug "$service_name is available (status: $status)"
+    local status
+    status=$(curl "${curl_opts[@]}" "$url" 2>/dev/null || echo "000")
+    
+    if [ "$status" = "$expected_status" ] || [ "$status" = "200" ]; then
+        print_success "$service_name is available"
         return 0
     else
-        print_debug "$service_name returned status: $status (expected: $expected_status)"
+        print_error "$service_name is not available (status: $status)"
         return 1
     fi
 }
 
-# Wait for Keycloak to be ready
-wait_for_keycloak() {
-    local max_wait=${1:-30}
-    local token_endpoint="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token"
-    
-    print_info "Waiting for Keycloak to be ready..."
-    
-    if retry_with_backoff 5 2 "check_service_availability 'Keycloak' '$token_endpoint' '405'"; then
-        print_success "Keycloak is ready!"
-        return 0
-    else
-        print_error "Keycloak is not available after ${max_wait} seconds"
-        return 1
-    fi
-}
+# ==========================================================================
+# Validation Functions
+# ==========================================================================
 
-# Common initialization
-init_client() {
-    # Check for required tools
-    check_required_tools curl jq base64
+# Validate environment setup
+validate_environment() {
+    local valid=true
+    
+    # Check required environment variables
+    for var in MCP_SERVER_URL KEYCLOAK_URL KEYCLOAK_REALM CLIENT_ID CLIENT_SECRET; do
+        if [ -z "${!var:-}" ]; then
+            print_error "Required environment variable $var is not set"
+            valid=false
+        fi
+    done
     
     # Validate URLs
-    if ! is_valid_url "$MCP_SERVER_URL"; then
-        die "Invalid MCP_SERVER_URL: $MCP_SERVER_URL"
-    fi
+    for url_var in MCP_SERVER_URL KEYCLOAK_URL; do
+        if ! is_valid_url "${!url_var}"; then
+            print_error "Invalid URL in $url_var: ${!url_var}"
+            valid=false
+        fi
+    done
     
-    if ! is_valid_url "$KEYCLOAK_URL"; then
-        die "Invalid KEYCLOAK_URL: $KEYCLOAK_URL"
+    if [ "$valid" = "false" ]; then
+        die "Environment validation failed"
     fi
 }
 
-# Export client-specific functions
-export -f check_access_token validate_jwt_format parse_jwt_payload
-export -f is_token_expired make_authenticated_request
-export -f check_service_availability wait_for_keycloak init_client 
+# Check if a URL is valid
+is_valid_url() {
+    local url=$1
+    [[ "$url" =~ ^https?:// ]]
+}
+
+# ==========================================================================
+# Run checks on script load
+# ==========================================================================
+
+# Check requirements when sourced
+check_requirements 
